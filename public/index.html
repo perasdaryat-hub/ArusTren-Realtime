@@ -70,6 +70,37 @@
         .dark .ql-fill { fill: #cbd5e1 !important; }
         .dark .ql-picker { color: #cbd5e1 !important; }
         
+        /* ARUSTREN MOBILE / RESPONSIVE LAYER */
+        html { overflow-x: hidden; }
+        body { overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
+        img { max-width: 100%; height: auto; }
+        button, a, input, select, textarea { touch-action: manipulation; }
+        @media (max-width: 768px) {
+            body { font-size: 14px; }
+            #portal-cat-nav { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; white-space: nowrap; }
+            #portal-cat-nav::-webkit-scrollbar { display: none; }
+            #portal-news-grid { grid-template-columns: 1fr !important; }
+            #studio-articles-list { grid-template-columns: 1fr !important; }
+            .article-body { font-size: 1rem; line-height: 1.75; overflow-wrap: anywhere; }
+            .article-body pre, .article-body table { max-width: 100%; overflow-x: auto; display: block; }
+            #modal-reader > div, #modal-ai > div, #modal-auth > div { max-height: 94vh; }
+            #reader-scroll-area { -webkit-overflow-scrolling: touch; }
+            .ql-toolbar.ql-snow { overflow-x: auto; white-space: nowrap; }
+            .ql-editor { min-height: 200px; }
+            #portal-search-input { font-size: 16px; }
+        }
+        @media (max-width: 480px) {
+            .article-body { font-size: .96rem; }
+            #read-title { font-size: 1.65rem !important; line-height: 1.2 !important; }
+            #read-summary { font-size: .95rem !important; }
+            .ql-editor { font-size: 16px; }
+            input, select, textarea { min-height: 44px; }
+            button { min-height: 42px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+        }
+
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #0b1329; }
@@ -2077,8 +2108,8 @@
             }
 
             if (provider === 'xkiro') {
-                const url = 'https://api.xkiro.com/v1/chat/completions';
-                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }], temperature: 0.75, max_tokens: 6000 }) });
+                const url = '/.netlify/functions/xkiro-chat';
+                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey, model, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }], temperature: 0.75, max_tokens: 6000 }) });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data?.error?.message || `xKiro HTTP ${res.status}`);
                 return data?.choices?.[0]?.message?.content || '';
@@ -2099,7 +2130,7 @@
             const btn = document.getElementById('btn-xkiro-models');
             btn.disabled = true; btn.innerText = 'Memuat...';
             try {
-                const res = await fetch('https://api.xkiro.com/v1/models');
+                const res = await fetch('/.netlify/functions/xkiro-models', { cache: 'no-store' });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data?.error?.message || `xKiro HTTP ${res.status}`);
                 const models = Array.isArray(data?.data) ? data.data.filter(m => m?.modality === 'chat' || !m?.modality) : [];
@@ -2362,6 +2393,11 @@ window.addEventListener('DOMContentLoaded',async()=>{
   if(!sb){console.error('Supabase client gagal dimuat');return}
   window.ARUSTREN_SUPABASE=sb;
   const V='arustren_visitor_id',S='arustren_visit_session';
+  const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const isUuid=id=>UUID_RE.test(String(id||''));
+  state.articles=(state.articles||[]).filter(a=>isUuid(a.id));
+  try{localStorage.setItem('arustren_articles',JSON.stringify(state.articles))}catch{}
+
   const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const isUuid=id=>UUID_RE.test(String(id||''));
   // Bersihkan data artikel lama yang masih memakai ID angka (mis. 102) agar tidak pernah dikirim ke Supabase.
