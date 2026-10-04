@@ -1,0 +1,9 @@
+{
+  "name": "arustren-realtime",
+  "version": "2.0.0",
+  "private": true,
+  "description": "ArusTren realtime news publisher with Python backend and SQLite database",
+  "scripts": {
+    "start": "python server.py"
+  }
+}
