@@ -1496,8 +1496,10 @@
             const btnPortal = document.getElementById('btn-mode-portal');
             const btnStudio = document.getElementById('btn-mode-studio');
             const catNav = document.getElementById('portal-cat-nav');
+            const libraryEl = document.getElementById('view-library');
 
             if (mode === 'portal') {
+                libraryEl?.classList.add('hidden');
                 portalEl.classList.remove('hidden');
                 studioEl.classList.add('hidden');
                 catNav.classList.remove('hidden');
@@ -1506,6 +1508,7 @@
                 btnStudio.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 text-slate-400 hover:text-white";
                 renderPortalView();
             } else {
+                libraryEl?.classList.add('hidden');
                 portalEl.classList.add('hidden');
                 studioEl.classList.remove('hidden');
                 catNav.classList.add('hidden');
@@ -2646,12 +2649,14 @@ Requirements:
     }).join('');
   }
 
+  let globalLibraryLoaded=false;
   function openLibrary(){
     document.getElementById('view-mode-portal')?.classList.add('hidden');
     document.getElementById('view-mode-studio')?.classList.add('hidden');
     document.getElementById('view-library')?.classList.remove('hidden');
     document.getElementById('portal-cat-nav')?.classList.remove('hidden');
     loadLibraryBooks().catch(e=>showToast(e.message||'Gagal memuat perpustakaan','error'));
+    if(!globalLibraryLoaded){globalLibraryLoaded=true;searchGlobalBooks(1).catch(()=>{});}
     const u=new URL(window.location.href);u.search='';u.hash='';u.searchParams.set('ruang','perpus');window.history.replaceState({library:true},'',u.toString());
   }
 
