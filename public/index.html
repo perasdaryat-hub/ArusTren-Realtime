@@ -1798,9 +1798,9 @@
                     </div>
 
                     <div class="flex items-center space-x-2 ml-2 flex-shrink-0">
-                        <button onclick="openReaderModal(${a.id})" class="p-2 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg text-xs" title="Pratinjau"><i class="fa-solid fa-eye"></i></button>
-                        <button ${a.ownerId === getActiveOwnerId() ? '' : 'disabled'} onclick="editArticle(${a.id})" class="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs" title="Edit"><i class="fa-solid fa-pen"></i></button>
-                        <button ${a.ownerId === getActiveOwnerId() ? '' : 'disabled'} onclick="deleteArticle(${a.id})" class="p-2 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded-lg text-xs" title="Hapus"><i class="fa-solid fa-trash"></i></button>
+                        <button onclick="openReaderModal('${a.id}')" class="p-2 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg text-xs" title="Pratinjau"><i class="fa-solid fa-eye"></i></button>
+                        <button ${a.ownerId === getActiveOwnerId() ? '' : 'disabled'} onclick="editArticle('${a.id}')" class="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                        <button ${a.ownerId === getActiveOwnerId() ? '' : 'disabled'} onclick="deleteArticle('${a.id}')" class="p-2 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded-lg text-xs" title="Hapus"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>
             `).join('');
