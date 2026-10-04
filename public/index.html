@@ -45,9 +45,12 @@
     </script>
 
     <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
     
     <!-- Google Fonts Inter & Merriweather for Editorial Reading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
 
     <!-- Quill.js Rich Text Editor -->
@@ -59,6 +62,8 @@
     <script src="./config.js"></script>
 
     <style>
+        img { content-visibility: auto; }
+        .article-body img { max-width: 100%; height: auto; }
         body { font-family: 'Inter', sans-serif; }
         .article-body { font-family: 'Merriweather', serif; font-size: 1.05rem; line-height: 1.85; }
         .ql-editor { min-height: 250px; font-size: 16px; line-height: 1.7; }
@@ -1350,8 +1355,10 @@
             renderPortalNewsGrid();
         }
 
+        let searchRenderTimer = null;
         function handleSearch() {
-            renderPortalNewsGrid();
+            clearTimeout(searchRenderTimer);
+            searchRenderTimer = setTimeout(() => renderPortalNewsGrid(), 120);
         }
 
         function renderHeroFeatured() {
@@ -1390,7 +1397,7 @@
                 <div class="space-y-4 flex flex-col justify-between">
                     ${secondary.map(art => `
                         <div onclick="openReaderModal(${art.id})" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex gap-4 hover:border-sky-500/50 cursor-pointer transition group flex-1">
-                            <img src="${art.cover}" class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover flex-shrink-0 group-hover:scale-105 transition">
+                            <img src="${art.cover}" loading="lazy" decoding="async" class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover flex-shrink-0 group-hover:scale-105 transition">
                             <div class="flex flex-col justify-between">
                                 <div>
                                     <span class="text-[10px] text-sky-400 font-bold uppercase">${art.category}</span>
@@ -1438,7 +1445,7 @@
                 <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden hover:border-sky-500/50 transition flex flex-col justify-between group shadow-lg">
                     <div>
                         <div class="relative h-44 overflow-hidden bg-slate-950 cursor-pointer" onclick="openReaderModal(${art.id})">
-                            <img src="${art.cover}" alt="${art.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                            <img src="${art.cover}" alt="${art.title}" loading="lazy" decoding="async" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
                             <span class="absolute top-3 left-3 bg-slate-950/80 backdrop-blur text-sky-300 text-[10px] font-bold px-2.5 py-1 rounded-full border border-sky-500/30">
                                 ${art.category}
                             </span>
@@ -2355,10 +2362,7 @@ function startServerRealtime(){
     const heartbeat=async()=>{try{const d=await api('/analytics/presence',{method:'POST',body:JSON.stringify({visitorId:getVisitorId(),page:currentViewMode})});window.__serverStats=window.__serverStats||{};window.__serverStats.online=d.online;const n=document.getElementById('live-readers-count');if(n)n.innerText=d.online??0}catch{}};
     heartbeat();clearInterval(serverOnlineTimer);serverOnlineTimer=setInterval(heartbeat,20000);
 }
-window.addEventListener('DOMContentLoaded',async()=>{
-    try{await loadServerMe(); await loadServerArticles();}catch(err){console.warn('Backend belum tersedia:',err.message)}
-    startServerRealtime(); await refreshFactualMetrics();
-});
+
 </script>
 
 
