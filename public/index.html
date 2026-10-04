@@ -2398,11 +2398,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
   state.articles=(state.articles||[]).filter(a=>isUuid(a.id));
   try{localStorage.setItem('arustren_articles',JSON.stringify(state.articles))}catch{}
 
-  const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  const isUuid=id=>UUID_RE.test(String(id||''));
-  // Bersihkan data artikel lama yang masih memakai ID angka (mis. 102) agar tidak pernah dikirim ke Supabase.
-  state.articles=(state.articles||[]).filter(a=>isUuid(a.id));
-  try{localStorage.setItem('arustren_articles',JSON.stringify(state.articles))}catch{}
+
   const vid=()=>{let x=localStorage.getItem(V);if(!x){x='vis_'+crypto.randomUUID();localStorage.setItem(V,x)}return x};
   const sid=()=>{let x=sessionStorage.getItem(S);if(!x){x='ses_'+crypto.randomUUID();sessionStorage.setItem(S,x)}return x};
   const map=a=>{const rs=a.reactions||[],cs=a.comments||[],r={suka:0,informatif:0,kagum:0};rs.forEach(x=>{if(r[x.type]!==undefined)r[x.type]++});return {...a,ownerId:a.owner_id,cover:a.image_url||'',author:a.author||'Redaksi ArusTren',readTime:a.read_time||'1 mnt',summary:a.summary||a.excerpt||'',tags:Array.isArray(a.tags)?a.tags.join(', '):(a.tags||''),adsenseSlot:a.adsense_slot||'',likes:r.suka,views:+a.views||0,reactions:r,comments:cs.map(x=>({id:x.id,name:x.author_name||'Pengunjung',city:'Indonesia',text:x.content,time:x.created_at?new Date(x.created_at).toLocaleString('id-ID'):'Baru saja'})),date:a.created_at?new Date(a.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):''}};
