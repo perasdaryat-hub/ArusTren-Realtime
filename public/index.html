@@ -2640,10 +2640,163 @@ window.addEventListener('DOMContentLoaded',async()=>{
   async function comment(e){e.preventDefault();if(!currentActiveArticleId||!requireLogin('mengirim komentar'))return;const {data:{user}}=await sb.auth.getUser(),text=document.getElementById('comment-text').value.trim(),name=document.getElementById('comment-author').value.trim()||user.email.split('@')[0];if(!text)return;const x=await sb.from('comments').insert({article_id:currentActiveArticleId,user_id:user.id,author_name:name,content:text});if(x.error)return showToast(x.error.message,'error');const a=await one(currentActiveArticleId);const i=state.articles.findIndex(x=>x.id===a.id);if(i>=0)state.articles[i]=a;renderArticleComments(a);document.getElementById('comment-text').value='';showToast('Komentar dipublikasikan!')}
   async function dash(){if(!currentUser){['stat-total-articles','stat-total-views'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerText='0'});return}const {data}=await sb.from('articles').select('views,adsense_slot').eq('owner_id',currentUser.id),rows=data||[],v=rows.reduce((s,x)=>s+(+x.views||0),0),slots=rows.filter(x=>x.adsense_slot).length;const set=(id,val)=>{const e=document.getElementById(id);if(e)e.innerText=val};set('stat-total-articles',rows.length);set('stat-total-views',v.toLocaleString('id-ID'));set('stat-est-revenue','Belum tersedia');set('stat-active-ads',slots);set('ads-active-badge',slots+' Artikel');set('widget-total-views',v.toLocaleString('id-ID'));set('widget-active-ads-count',slots);set('widget-est-earning','Belum tersedia')}
   async function metrics(){const x=await sb.from('profiles').select('id',{count:'exact',head:true});window.__supabaseUsers=x.count||0;const e=document.getElementById('stat-total-users');if(e)e.innerText=String(window.__supabaseUsers);const s=document.getElementById('account-data-status');if(s)s.innerText='Supabase — data global';await dash()}
-  async function realtime(){const refresh=()=>{articles().catch(()=>{});metrics().catch(()=>{})};['articles','comments','reactions'].forEach(t=>sb.channel('arustren-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},refresh).subscribe());const c=sb.channel('arustren-online',{config:{presence:{key:vid()}}});c.on('presence',{event:'sync'},()=>{window.__supabaseOnline=Object.keys(c.presenceState()).length;const a=document.getElementById('live-readers-count'),b=document.getElementById('read-active-users-num');if(a)a.innerText=window.__supabaseOnline;if(b)b.innerText=window.__supabaseOnline}).subscribe(async st=>{if(st==='SUBSCRIBED')await c.track({page:currentViewMode,at:new Date().toISOString()})})}
-  Object.assign(window,{loadServerMe:me,submitAuth:auth,logoutUser:logout,loadServerArticles:articles,openReaderModal:reader,saveArticle:save,editArticle:edit,deleteArticle:del,addArticleLike:()=>react('suka'),triggerReaction:react,submitUserComment:comment,updateDashboardStats:dash,updateSidebarWidgetStats:dash,refreshFactualMetrics:metrics,startServerRealtime:realtime,shareCurrentArticle});
+  async function realtime(){const refresh=()=>{articles().catch(()=>{});metrics().catch(()=>{});loadLibraryBooks().catch(()=>{})};['articles','comments','reactions','library_books','library_comments'].forEach(t=>sb.channel('arustren-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},refresh).subscribe());const c=sb.channel('arustren-online',{config:{presence:{key:vid()}}});c.on('presence',{event:'sync'},()=>{window.__supabaseOnline=Object.keys(c.presenceState()).length;const a=document.getElementById('live-readers-count'),b=document.getElementById('read-active-users-num');if(a)a.innerText=window.__supabaseOnline;if(b)b.innerText=window.__supabaseOnline}).subscribe(async st=>{if(st==='SUBSCRIBED')await c.track({page:currentViewMode,at:new Date().toISOString()})})}
+
+  let libraryBooks=[];
+  let currentLibraryBookId=null;
+  let currentLibraryPage=1;
+
+  const escLibrary=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const validLibraryUuid=id=>UUID_RE.test(String(id||''));
+
+  async function loadLibraryBooks(){
+    const {data,error}=await sb.from('library_books').select('*').eq('status','published').order('created_at',{ascending:false});
+    if(error) throw error;
+    libraryBooks=data||[];
+    const cats=[...new Set(libraryBooks.map(b=>b.category).filter(Boolean))].sort();
+    const select=document.getElementById('library-category');
+    if(select){
+      const old=select.value;
+      select.innerHTML='<option value="ALL">Semua Kategori</option>'+cats.map(x=>'<option value="'+escLibrary(x)+'">'+escLibrary(x)+'</option>').join('');
+      if(cats.includes(old))select.value=old;
+    }
+    renderLibraryBooks();
+    return libraryBooks;
+  }
+
+  function renderLibraryBooks(){
+    const box=document.getElementById('library-books-grid'); if(!box)return;
+    const q=(document.getElementById('library-search')?.value||'').trim().toLowerCase();
+    const cat=document.getElementById('library-category')?.value||'ALL';
+    const list=libraryBooks.filter(b=>{
+      const hay=[b.title,b.author,b.category,b.description,...(b.tags||[])].join(' ').toLowerCase();
+      return (!q||hay.includes(q))&&(cat==='ALL'||b.category===cat);
+    });
+    if(!list.length){
+      box.innerHTML='<div class="col-span-full py-16 text-center text-slate-500"><i class="fa-solid fa-book-open text-3xl mb-3"></i><p class="text-xs">Belum ada buku yang cocok dengan pencarian.</p></div>';
+      return;
+    }
+    box.innerHTML=list.map(b=>{
+      const cover=b.cover_url||'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=700&q=80';
+      return '<article class="bg-slate-900/90 border border-slate-800 rounded-2xl overflow-hidden group hover:border-emerald-500/40 transition shadow-lg">'+
+        '<button onclick="openLibraryBook(\''+b.id+'\',1)" class="block w-full text-left">'+
+        '<div class="h-56 bg-slate-950 overflow-hidden relative"><img src="'+escLibrary(cover)+'" alt="'+escLibrary(b.title)+'" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">'+
+        '<span class="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-slate-950/85 text-emerald-300 text-[10px] font-bold border border-emerald-500/20">'+escLibrary(b.category)+'</span></div>'+
+        '<div class="p-4 space-y-2"><h3 class="font-bold text-white text-sm line-clamp-2 group-hover:text-emerald-300">'+escLibrary(b.title)+'</h3>'+
+        '<p class="text-[11px] text-slate-400">'+escLibrary(b.author)+'</p>'+
+        '<p class="text-[10px] text-slate-500 line-clamp-2">'+escLibrary(b.description||'Buku digital ArusTren.')+'</p>'+
+        '<div class="flex items-center justify-between text-[10px] text-slate-500 pt-2"><span><i class="fa-solid fa-book-open mr-1 text-emerald-400"></i>'+Number(b.total_pages||0)+' halaman</span><span class="text-emerald-400 font-bold">Baca <i class="fa-solid fa-arrow-right ml-1"></i></span></div></div></button></article>';
+    }).join('');
+  }
+
+  function openLibrary(){
+    document.getElementById('view-mode-portal')?.classList.add('hidden');
+    document.getElementById('view-mode-studio')?.classList.add('hidden');
+    document.getElementById('view-library')?.classList.remove('hidden');
+    document.getElementById('portal-cat-nav')?.classList.remove('hidden');
+    loadLibraryBooks().catch(e=>showToast(e.message||'Gagal memuat perpustakaan','error'));
+    const u=new URL(window.location.href);u.search='';u.hash='';u.searchParams.set('ruang','perpus');window.history.replaceState({library:true},'',u.toString());
+  }
+
+  function closeLibraryReader(){document.getElementById('modal-library-reader')?.classList.add('hidden');}
+  function openLibraryBookForm(){
+    if(!requireLogin('menambahkan buku'))return;
+    document.getElementById('modal-library-form')?.classList.remove('hidden');
+  }
+  function closeLibraryBookForm(){document.getElementById('modal-library-form')?.classList.add('hidden');}
+
+  async function openLibraryBook(id,page=1){
+    if(!validLibraryUuid(id))return showToast('ID buku tidak valid.','error');
+    const {data,error}=await sb.from('library_books').select('*').eq('id',id).eq('status','published').maybeSingle();
+    if(error)throw showToast(error.message,'error');
+    if(!data)return showToast('Buku tidak ditemukan.','error');
+    currentLibraryBookId=data.id;
+    currentLibraryPage=Math.max(1,Number(page)||1);
+    if(data.total_pages)currentLibraryPage=Math.min(currentLibraryPage,Number(data.total_pages));
+    document.getElementById('library-reader-category').innerText=data.category||'Umum';
+    document.getElementById('library-reader-title').innerText=data.title;
+    document.getElementById('library-reader-author').innerText='oleh '+(data.author||'Tidak diketahui');
+    document.getElementById('library-reader-description').innerText=data.description||'';
+    document.getElementById('library-reader-tags').innerText=(data.tags||[]).length?'# '+data.tags.join(' # '):'';
+    document.getElementById('library-reader-year').innerText=data.published_year?'Terbit '+data.published_year:'';
+    document.getElementById('library-total-pages').innerText=data.total_pages?' dari '+data.total_pages:'';
+    updateLibraryPageUI(data);
+    await loadLibraryComments(data.id);
+    document.getElementById('modal-library-reader').classList.remove('hidden');
+    const u=new URL(window.location.href);u.search='';u.hash='';u.searchParams.set('perpus',String(data.id));u.searchParams.set('halaman',String(currentLibraryPage));window.history.replaceState({libraryBookId:data.id,page:currentLibraryPage},'',u.toString());
+  }
+
+  function updateLibraryPageUI(book){
+    const page=Math.max(1,Number(currentLibraryPage)||1);
+    document.getElementById('library-page-number').innerText=page;
+    document.getElementById('library-page-input').value=page;
+    const frame=document.getElementById('library-pdf-frame');
+    if(frame&&book?.pdf_url){
+      const sep=book.pdf_url.includes('#')?'&':'#';
+      frame.src=book.pdf_url+sep+'page='+page+'&zoom=page-width';
+    }
+  }
+  async function refreshLibraryReader(){
+    if(!currentLibraryBookId)return;
+    const b=libraryBooks.find(x=>x.id===currentLibraryBookId);
+    if(b)updateLibraryPageUI(b);
+  }
+  function goToLibraryPage(value){
+    const b=libraryBooks.find(x=>x.id===currentLibraryBookId); if(!b)return;
+    let p=Math.max(1,parseInt(value,10)||1); if(b.total_pages)p=Math.min(p,Number(b.total_pages));
+    currentLibraryPage=p;updateLibraryPageUI(b);
+    const u=new URL(window.location.href);u.searchParams.set('perpus',String(b.id));u.searchParams.set('halaman',String(p));window.history.replaceState({libraryBookId:b.id,page:p},'',u.toString());
+  }
+  function changeLibraryPage(delta){goToLibraryPage(currentLibraryPage+delta)}
+  async function shareCurrentLibraryPage(){
+    const b=libraryBooks.find(x=>x.id===currentLibraryBookId);if(!b)return;
+    const u=new URL(window.location.href);u.search='';u.hash='';u.searchParams.set('perpus',String(b.id));u.searchParams.set('halaman',String(currentLibraryPage));
+    const url=u.toString();
+    try{if(navigator.share){await navigator.share({title:b.title,text:'Baca '+b.title+' di Ruang Perpus ArusTren',url});return}}catch(e){if(e?.name==='AbortError')return}
+    try{await navigator.clipboard.writeText(url);showToast('Link buku dan halaman berhasil disalin!')}catch{showToast('Gagal menyalin link.','error')}
+  }
+
+  async function loadLibraryComments(bookId){
+    const box=document.getElementById('library-comments-list'),count=document.getElementById('library-comments-count');if(!box)return;
+    const {data,error}=await sb.from('library_comments').select('*').eq('book_id',bookId).order('created_at',{ascending:false});
+    if(error){box.innerHTML='<p class="text-xs text-rose-400">'+escLibrary(error.message)+'</p>';return}
+    count.innerText=(data||[]).length+' komentar';
+    box.innerHTML=(data||[]).map(c=>'<div class="p-3 bg-slate-950 border border-slate-800 rounded-xl"><div class="flex justify-between gap-2"><strong class="text-[11px] text-emerald-300">'+escLibrary(c.author_name)+'</strong><span class="text-[9px] text-slate-600">'+new Date(c.created_at).toLocaleString('id-ID')+'</span></div><p class="text-[11px] text-slate-300 mt-1 leading-relaxed">'+escLibrary(c.content)+'</p></div>').join('')||'<p class="text-xs text-slate-600 text-center py-4">Belum ada komentar.</p>';
+  }
+
+  async function submitLibraryComment(e){
+    e.preventDefault();if(!currentLibraryBookId||!requireLogin('mengirim komentar buku'))return;
+    const {data:{user}}=await sb.auth.getUser();if(!user)return;
+    const name=document.getElementById('library-comment-name').value.trim()||user.email.split('@')[0];
+    const content=document.getElementById('library-comment-text').value.trim();if(!content)return;
+    const {error}=await sb.from('library_comments').insert({book_id:currentLibraryBookId,user_id:user.id,author_name:name,content});
+    if(error)return showToast(error.message,'error');
+    document.getElementById('library-comment-text').value='';await loadLibraryComments(currentLibraryBookId);showToast('Komentar buku berhasil dipublikasikan!');
+  }
+
+  async function saveLibraryBook(e){
+    e.preventDefault();if(!requireLogin('menambahkan buku'))return;
+    const {data:{user}}=await sb.auth.getUser();if(!user)return;
+    const tags=document.getElementById('library-book-tags').value.split(',').map(x=>x.trim()).filter(Boolean);
+    const payload={
+      owner_id:user.id,title:document.getElementById('library-book-title').value.trim(),
+      author:document.getElementById('library-book-author').value.trim(),
+      category:document.getElementById('library-book-category').value.trim(),
+      cover_url:document.getElementById('library-book-cover').value.trim(),
+      pdf_url:document.getElementById('library-book-pdf').value.trim(),
+      total_pages:Math.max(0,Number(document.getElementById('library-book-pages').value)||0),
+      published_year:Number(document.getElementById('library-book-year').value)||null,
+      description:document.getElementById('library-book-description').value.trim(),
+      tags,status:'published'
+    };
+    const {error}=await sb.from('library_books').insert(payload);
+    if(error)return showToast(error.message,'error');
+    e.target.reset();closeLibraryBookForm();await loadLibraryBooks();showToast('Buku berhasil ditambahkan ke Ruang Perpus!');
+  }
+
+  Object.assign(window,{loadServerMe:me,submitAuth:auth,logoutUser:logout,loadServerArticles:articles,openReaderModal:reader,saveArticle:save,editArticle:edit,deleteArticle:del,addArticleLike:()=>react('suka'),triggerReaction:react,submitUserComment:comment,updateDashboardStats:dash,updateSidebarWidgetStats:dash,refreshFactualMetrics:metrics,startServerRealtime:realtime,shareCurrentArticle,openLibrary,renderLibraryBooks,openLibraryBook,closeLibraryReader,openLibraryBookForm,closeLibraryBookForm,saveLibraryBook,submitLibraryComment,shareCurrentLibraryPage,changeLibraryPage,goToLibraryPage});
   sb.auth.onAuthStateChange((_e,s)=>{currentUser=s?.user?{id:s.user.id,email:s.user.email}:null;updateAuthUI()});
-  document.addEventListener('DOMContentLoaded',async()=>{try{await me();await articles();await metrics();await realtime();const shared=new URLSearchParams(window.location.search).get('artikel');if(shared&&isUuid(shared))await reader(shared)}catch(x){console.warn('Supabase:',x.message)}});
+  document.addEventListener('DOMContentLoaded',async()=>{try{await me();await articles();await metrics();await loadLibraryBooks();await realtime();const params=new URLSearchParams(window.location.search);const shared=params.get('artikel');const lib=params.get('perpus');const page=params.get('halaman')||'1';if(shared&&isUuid(shared))await reader(shared);else if(lib&&isUuid(lib)){openLibrary();await openLibraryBook(lib,page)}}catch(x){console.warn('Supabase:',x.message)}});
 })();
 </script>
 </body>
