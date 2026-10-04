@@ -2708,7 +2708,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
   async function openLibraryBook(id,page=1){
     if(!validLibraryUuid(id))return showToast('ID buku tidak valid.','error');
     const {data,error}=await sb.from('library_books').select('*').eq('id',id).eq('status','published').maybeSingle();
-    if(error)throw showToast(error.message,'error');
+    if(error){showToast(error.message,'error');return;}
     if(!data)return showToast('Buku tidak ditemukan.','error');
     currentLibraryBookId=data.id;
     currentLibraryPage=Math.max(1,Number(page)||1);
