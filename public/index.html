@@ -110,6 +110,12 @@
             #ad-render-arttop,#ad-render-artbottom,#comments-list-box,#related-articles-box,#read-crosspost-badges { display:none !important; }
         }
 
+        /* RUANG PERPUS */
+        .library-reader-frame { min-height: 70vh; }
+        @media (max-width: 768px) {
+            .library-reader-frame { min-height: 62vh; }
+        }
+
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #0b1329; }
@@ -213,6 +219,9 @@
                 <button onclick="filterCategory('Pop Culture')" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">Pop Culture</button>
                 <button onclick="filterCategory('Bisnis & Keuangan')" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">Bisnis & Keuangan</button>
                 <button onclick="filterCategory('Edukasi')" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">Edukasi</button>
+                <button onclick="openLibrary()" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-emerald-300 hover:text-white hover:bg-emerald-500/10 transition flex items-center">
+                    <i class="fa-solid fa-book-open mr-1.5"></i> Ruang Perpus
+                </button>
                 <button onclick="filterCategory('Viral & Hot')" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition flex items-center">
                     <i class="fa-solid fa-fire mr-1 text-xs"></i> Viral & Hot
                 </button>
@@ -726,6 +735,46 @@
             </section>
 
         </main>
+
+        <!-- RUANG PERPUS -->
+        <section id="view-library" class="hidden space-y-6">
+            <div class="rounded-3xl border border-emerald-500/20 bg-gradient-to-br from-emerald-950/40 via-slate-900 to-slate-950 p-6 sm:p-8">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                    <div>
+                        <span class="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                            <i class="fa-solid fa-book-open"></i> Ruang Perpus
+                        </span>
+                        <h2 class="mt-3 text-2xl sm:text-3xl font-black text-white">Perpustakaan Digital ArusTren</h2>
+                        <p class="mt-2 max-w-2xl text-sm text-slate-400">Kumpulan buku digital yang bisa dibaca langsung, dikomentari, dan dibagikan sampai ke halaman tertentu.</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="switchViewMode('portal')" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200">
+                            <i class="fa-solid fa-newspaper mr-1.5"></i> Kembali Berita
+                        </button>
+                        <button onclick="openLibraryBookForm()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/20">
+                            <i class="fa-solid fa-plus mr-1.5"></i> Tambah Buku
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-3">
+                <div class="relative flex-1">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                    <input id="library-search" oninput="renderLibraryBooks()" type="search" placeholder="Cari judul, penulis, kategori..." class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500">
+                </div>
+                <select id="library-category" onchange="renderLibraryBooks()" class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-emerald-500">
+                    <option value="ALL">Semua Kategori</option>
+                </select>
+            </div>
+
+            <div id="library-books-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                <div class="col-span-full py-16 text-center text-slate-500">
+                    <i class="fa-solid fa-spinner fa-spin text-2xl mb-3"></i>
+                    <p class="text-xs">Memuat koleksi buku...</p>
+                </div>
+            </div>
+        </section>
     </div>
 
     <!-- MODAL 1: OFFICIAL ARTICLE READER MODAL (Situs Berita Resmi) -->
@@ -763,6 +812,100 @@
                 <button id="auth-switch-btn" type="button" onclick="switchAuthMode()" class="w-full text-xs text-slate-400 hover:text-sky-300 transition">Belum punya akun? <strong class="text-sky-400">Daftar sekarang</strong></button>
                 <div class="text-[10px] leading-relaxed text-slate-500 bg-slate-950 border border-slate-800 rounded-xl p-3">
                     <i class="fa-solid fa-circle-info text-sky-400 mr-1"></i> Login pada file HTML ini adalah penyimpanan akun lokal di browser. Untuk website publik dengan banyak pengguna, akun dan sandi harus dipindahkan ke backend/database agar benar-benar aman.
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL RUANG PERPUS -->
+    <div id="modal-library-reader" class="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[65] flex justify-center items-center p-2 sm:p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-6xl max-h-[96vh] rounded-3xl flex flex-col overflow-hidden shadow-2xl">
+            <div class="px-5 py-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-4">
+                <div class="min-w-0">
+                    <p id="library-reader-category" class="text-[10px] font-bold text-emerald-400 uppercase">Perpustakaan</p>
+                    <h2 id="library-reader-title" class="text-base sm:text-lg font-black text-white truncate">Judul Buku</h2>
+                    <p id="library-reader-author" class="text-[10px] text-slate-500">Penulis</p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <button onclick="shareCurrentLibraryPage()" class="px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-bold">
+                        <i class="fa-solid fa-share-nodes mr-1"></i> Bagikan
+                    </button>
+                    <button onclick="closeLibraryReader()" class="w-9 h-9 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px]">
+                <div class="min-h-0 bg-slate-950 p-2 sm:p-4">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <div class="text-[11px] text-slate-400">
+                            Halaman <strong id="library-page-number" class="text-white">1</strong>
+                            <span id="library-total-pages" class="text-slate-600"></span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="changeLibraryPage(-1)" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300 hover:text-white"><i class="fa-solid fa-chevron-left"></i></button>
+                            <input id="library-page-input" type="number" min="1" value="1" onchange="goToLibraryPage(this.value)" class="w-16 bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-xs text-center text-white">
+                            <button onclick="changeLibraryPage(1)" class="px-3 py-1.5 rounded-lg bg-slate-800 text-xs text-slate-300 hover:text-white"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <iframe id="library-pdf-frame" title="Pembaca buku ArusTren" class="library-reader-frame w-full rounded-xl border border-slate-800 bg-white" src="about:blank"></iframe>
+                </div>
+
+                <aside class="border-t lg:border-t-0 lg:border-l border-slate-800 flex flex-col min-h-0">
+                    <div class="p-5 border-b border-slate-800">
+                        <p id="library-reader-description" class="text-xs leading-relaxed text-slate-400"></p>
+                        <div class="flex flex-wrap gap-2 mt-3">
+                            <span id="library-reader-tags" class="text-[10px] text-emerald-300"></span>
+                            <span id="library-reader-year" class="text-[10px] text-slate-500"></span>
+                        </div>
+                    </div>
+                    <div class="p-5 flex flex-col min-h-0 flex-1">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="font-bold text-sm text-white"><i class="fa-solid fa-comments text-emerald-400 mr-2"></i> Komentar</h3>
+                            <span id="library-comments-count" class="text-[10px] text-slate-500">0</span>
+                        </div>
+                        <form onsubmit="submitLibraryComment(event)" class="space-y-2 mb-4">
+                            <input id="library-comment-name" required placeholder="Nama kamu" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white">
+                            <textarea id="library-comment-text" required rows="3" maxlength="2000" placeholder="Tulis komentar tentang buku..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white"></textarea>
+                            <button class="w-full px-3 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">
+                                <i class="fa-solid fa-paper-plane mr-1"></i> Kirim Komentar
+                            </button>
+                        </form>
+                        <div id="library-comments-list" class="space-y-2 overflow-y-auto flex-1 min-h-0"></div>
+                    </div>
+                </aside>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL TAMBAH BUKU -->
+    <div id="modal-library-form" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[75] flex justify-center items-center p-4 hidden">
+        <div class="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 max-h-[94vh] overflow-y-auto">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h3 class="text-lg font-black text-white">Tambah Buku ke Ruang Perpus</h3>
+                    <p class="text-xs text-slate-500 mt-1">Gunakan URL PDF publik yang memang boleh dibagikan.</p>
+                </div>
+                <button onclick="closeLibraryBookForm()" class="text-slate-500 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form onsubmit="saveLibraryBook(event)" class="space-y-3">
+                <input id="library-book-title" required placeholder="Judul buku" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input id="library-book-author" required placeholder="Penulis" class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white">
+                    <input id="library-book-category" required placeholder="Kategori, misalnya Edukasi" class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input id="library-book-cover" placeholder="URL cover buku (opsional)" class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white">
+                    <input id="library-book-pages" type="number" min="0" placeholder="Jumlah halaman (opsional)" class="bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white">
+                </div>
+                <input id="library-book-pdf" type="url" required placeholder="URL PDF buku" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white">
+                <input id="library-book-year" type="number" min="0" max="3000" placeholder="Tahun terbit (opsional)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white">
+                <textarea id="library-book-description" rows="4" placeholder="Deskripsi singkat buku..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white"></textarea>
+                <input id="library-book-tags" placeholder="Tag, pisahkan dengan koma" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white">
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeLibraryBookForm()" class="px-4 py-2.5 rounded-xl bg-slate-800 text-xs font-bold text-slate-300">Batal</button>
+                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">Simpan Buku</button>
                 </div>
             </form>
         </div>
