@@ -768,6 +768,26 @@
                 </select>
             </div>
 
+            <div class="mt-2 rounded-2xl border border-sky-500/20 bg-sky-500/5 p-4">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div>
+                        <h3 class="font-black text-white text-sm"><i class="fa-solid fa-earth-americas text-sky-400 mr-2"></i>Koleksi Buku Dunia</h3>
+                        <p class="text-[10px] text-slate-500 mt-1">Cari koleksi buku yang tersedia untuk dibaca secara terbuka. Metadata berasal dari Open Library.</p>
+                    </div>
+                    <div class="flex gap-2 w-full lg:w-auto">
+                        <input id="global-library-search" type="search" placeholder="Cari novel, buku, penulis..." class="flex-1 lg:w-80 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-sky-500">
+                        <button onclick="searchGlobalBooks(1)" class="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold"><i class="fa-solid fa-search"></i></button>
+                    </div>
+                </div>
+                <div id="global-library-status" class="text-[10px] text-slate-500 mt-3"></div>
+                <div id="global-library-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4"></div>
+                <div class="flex items-center justify-center gap-3 mt-5">
+                    <button id="global-library-prev" onclick="searchGlobalBooks(globalLibraryPage-1)" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 disabled:opacity-40" disabled><i class="fa-solid fa-chevron-left"></i></button>
+                    <span id="global-library-page" class="text-[10px] text-slate-500">Halaman 1</span>
+                    <button id="global-library-next" onclick="searchGlobalBooks(globalLibraryPage+1)" class="px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 disabled:opacity-40" disabled><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </div>
+
             <div id="library-books-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 <div class="col-span-full py-16 text-center text-slate-500">
                     <i class="fa-solid fa-spinner fa-spin text-2xl mb-3"></i>
@@ -2494,123 +2514,6 @@ Requirements:
         }
     </script>
 <script>
-/* ARUSTREN DATABASE BRIDGE — server is the source of truth */
-const ARUSTREN_API = (window.ARUSTREN_CONFIG?.API_BASE || (window.location.origin + '/api')).replace(/\/+$/, '');
-const ARUSTREN_TOKEN_KEY = 'arustren_server_token';
-const ARUSTREN_VISITOR_KEY = 'arustren_visitor_id';
-const ARUSTREN_SESSION_KEY = 'arustren_visit_session';
-let serverRealtimeSource = null;
-let serverOnlineTimer = null;
-
-function serverHeaders(json=true){
-    const h={}; if(json) h['Content-Type']='application/json';
-    const t=localStorage.getItem(ARUSTREN_TOKEN_KEY); if(t) h.Authorization='Bearer '+t;
-    return h;
-}
-async function api(path, options={}){
-    const r=await fetch(ARUSTREN_API+path,{...options,headers:{...serverHeaders(!!options.body),...(options.headers||{})}});
-    let d={}; try{d=await r.json()}catch{}
-    if(!r.ok) throw new Error(d.error||`HTTP ${r.status}`); return d;
-}
-function getVisitorId(){let v=localStorage.getItem(ARUSTREN_VISITOR_KEY);if(!v){v='vis_'+crypto.randomUUID();localStorage.setItem(ARUSTREN_VISITOR_KEY,v)}return v}
-function getVisitSession(){let v=sessionStorage.getItem(ARUSTREN_SESSION_KEY);if(!v){v='ses_'+crypto.randomUUID();sessionStorage.setItem(ARUSTREN_SESSION_KEY,v)}return v}
-function serverArticleToUi(a){return {...a,ownerId:a.ownerId||null,likes:Number(a.reactions?.suka||0),views:Number(a.views||0),comments:(a.comments||[]).map(c=>({...c,time:c.created_at?new Date(c.created_at).toLocaleString('id-ID'):'Baru saja'}))}}
-async function loadServerArticles(){
-    const d=await api('/articles');
-    state.articles=(d.articles||[]).map(serverArticleToUi);
-    renderPortalView(); renderStudioDashboard(); updateDashboardStats();
-    return state.articles;
-}
-async function loadServerMe(){
-    const t=localStorage.getItem(ARUSTREN_TOKEN_KEY); if(!t){currentUser=null;updateAuthUI();return null}
-    try{const d=await api('/me');currentUser=d.user||null;updateAuthUI();return currentUser}catch{localStorage.removeItem(ARUSTREN_TOKEN_KEY);currentUser=null;updateAuthUI();return null}
-}
-async function submitAuth(e){
-    e.preventDefault();
-    const email=normalizeGmail(document.getElementById('auth-email').value), password=document.getElementById('auth-password').value, confirm=document.getElementById('auth-confirm').value;
-    if(!isValidGmail(email)) return showToast('Gunakan alamat Gmail yang valid (@gmail.com).','error');
-    if(password.length<8) return showToast('Sandi minimal 8 karakter.','error');
-    if(authMode==='register'&&password!==confirm)return showToast('Konfirmasi sandi tidak sama.','error');
-    try{
-        const d=await api('/auth/'+(authMode==='register'?'register':'login'),{method:'POST',body:JSON.stringify({email,password})});
-        localStorage.setItem(ARUSTREN_TOKEN_KEY,d.token); currentUser=d.user; closeAuthModal(); updateAuthUI();
-        if(authMode==='register'){
-            try{await api('/bootstrap-samples',{method:'POST',body:JSON.stringify({articles:sampleArticles})})}catch{}
-        }
-        await loadServerArticles(); await refreshFactualMetrics(); showToast(authMode==='register'?'Akun berhasil dibuat. Data tersimpan di database.':'Login berhasil.');
-    }catch(err){showToast(err.message,'error')}
-}
-function logoutUser(){localStorage.removeItem(ARUSTREN_TOKEN_KEY);currentUser=null;updateAuthUI();switchViewMode('portal');showToast('Kamu sudah logout.')}
-function getCurrentUser(){return currentUser}
-function getRegisteredAccountCount(){return Number(window.__serverStats?.users||0)}
-function getAccountDataStatus(){return 'Database server — data global'}
-function getActiveOwnerId(){return currentUser?.id||null}
-function requireLogin(action='melanjutkan'){if(currentUser)return true;showToast('Silakan login terlebih dahulu untuk '+action+'.','error');openAuthModal('login');return false}
-
-async function openReaderModal(id){
-    try{
-        const d=await api('/articles/'+encodeURIComponent(id)); const art=serverArticleToUi(d.article); currentActiveArticleId=art.id;
-            const articleUrl=new URL(window.location.href);articleUrl.search='';articleUrl.hash='';articleUrl.searchParams.set('artikel',String(art.id));window.history.replaceState({articleId:art.id},'',articleUrl.toString());
-        const viewKey='arustren_viewed_'+art.id;
-        if(!sessionStorage.getItem(viewKey)){
-            await api('/analytics/view',{method:'POST',body:JSON.stringify({articleId:art.id,visitorId:getVisitorId(),sessionId:getVisitSession()})});
-            sessionStorage.setItem(viewKey,'1');
-            const fresh=await api('/articles/'+encodeURIComponent(id)); Object.assign(art,serverArticleToUi(fresh.article));
-        }
-        const idx=state.articles.findIndex(x=>String(x.id)===String(art.id)); if(idx>=0)state.articles[idx]=art; else state.articles.unshift(art);
-        document.getElementById('read-title').innerText=art.title; document.getElementById('read-author').innerText=art.author; document.getElementById('read-date').innerText=art.date||''; document.getElementById('read-time').innerText=art.readTime||''; document.getElementById('read-category').innerText=art.category||'';
-        document.getElementById('read-views-count').innerText=art.views; document.getElementById('read-likes-count').innerText=art.likes||0; document.getElementById('read-summary').innerText=art.summary||art.excerpt||''; document.getElementById('read-content-body').innerHTML=art.content||'';
-        const cover=document.getElementById('read-cover-img');cover.src=art.cover||''; document.getElementById('read-cover-box').classList.toggle('hidden',!art.cover);
-        document.getElementById('read-active-users-num').innerText=window.__serverStats?.online??'--';
-        document.getElementById('react-suka-num').innerText=art.reactions?.suka||0; document.getElementById('react-info-num').innerText=art.reactions?.informatif||0; document.getElementById('react-kagum-num').innerText=art.reactions?.kagum||0;
-        renderArticleComments(art); document.getElementById('modal-reader').classList.remove('hidden'); document.getElementById('reader-scroll-area').scrollTop=0; updateReadingProgress();
-    }catch(err){showToast(err.message,'error')}
-}
-async function addArticleLike(){return triggerReaction('suka')}
-async function triggerReaction(type){
-    if(!currentActiveArticleId)return; try{const d=await api('/articles/'+encodeURIComponent(currentActiveArticleId)+'/reactions',{method:'POST',body:JSON.stringify({visitorId:getVisitorId(),type})});const a=serverArticleToUi(d.article);const i=state.articles.findIndex(x=>String(x.id)===String(a.id));if(i>=0)state.articles[i]=a;document.getElementById('react-suka-num').innerText=a.reactions.suka||0;document.getElementById('react-info-num').innerText=a.reactions.informatif||0;document.getElementById('react-kagum-num').innerText=a.reactions.kagum||0;document.getElementById('read-likes-count').innerText=a.reactions.suka||0;showToast('Reaksi berhasil dikirim!')}catch(err){showToast(err.message,'error')}
-}
-async function submitUserComment(e){
-    e.preventDefault(); if(!currentActiveArticleId)return;
-    const name=document.getElementById('comment-author').value.trim(),city=document.getElementById('comment-city').value.trim()||'Indonesia',text=document.getElementById('comment-text').value.trim(); if(!text)return;
-    try{const d=await api('/articles/'+encodeURIComponent(currentActiveArticleId)+'/comments',{method:'POST',body:JSON.stringify({visitorId:getVisitorId(),name,city,text})});const a=serverArticleToUi(d.article);const i=state.articles.findIndex(x=>String(x.id)===String(a.id));if(i>=0)state.articles[i]=a;renderArticleComments(a);document.getElementById('comment-text').value='';showToast('Komentar kamu berhasil dipublikasikan!')}catch(err){showToast(err.message,'error')}
-}
-async function saveArticle(e){
-    e.preventDefault(); if(!requireLogin('menyimpan artikel'))return;
-    const editId=document.getElementById('edit-article-id').value, title=document.getElementById('input-title').value.trim(), category=document.getElementById('input-category').value, author=document.getElementById('input-author').value||'Redaksi ArusTren', tags=document.getElementById('input-tags').value, adsenseSlot=document.getElementById('input-adsense-slot').value.trim(), cover=document.getElementById('input-cover').value||'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?auto=format&fit=crop&w=1200&q=80', content=quillEditor.root.innerHTML;
-    const textContent=quillEditor.getText(), excerpt=textContent.slice(0,130)+'...', readTime=Math.max(1,Math.ceil(textContent.trim().split(/\s+/).length/200))+' mnt';
-    const payload={title,category,author,tags,cover,content,excerpt,summary:excerpt,readTime,adsenseSlot};
-    try{let d;if(editId)d=await api('/articles/'+encodeURIComponent(editId),{method:'PUT',body:JSON.stringify(payload)});else d=await api('/articles',{method:'POST',body:JSON.stringify(payload)});const a=serverArticleToUi(d.article);const i=state.articles.findIndex(x=>String(x.id)===String(a.id));if(i>=0)state.articles[i]=a;else state.articles.unshift(a);await loadServerArticles();switchViewMode('portal');showToast(editId?'Artikel berhasil diperbarui di database!':'Artikel berhasil dipublikasikan ke database!')}catch(err){showToast(err.message,'error')}
-}
-async function editArticle(id){
-    if(!requireLogin('mengedit artikel'))return; try{const d=await api('/articles/'+encodeURIComponent(id));const a=serverArticleToUi(d.article);if(a.ownerId!==currentUser.id)return showToast('Artikel ini bukan milik akun kamu.','error');document.getElementById('edit-article-id').value=a.id;document.getElementById('input-title').value=a.title;document.getElementById('input-category').value=a.category;document.getElementById('input-author').value=a.author;document.getElementById('input-tags').value=a.tags||'';document.getElementById('input-adsense-slot').value=a.adsenseSlot||'';document.getElementById('input-cover').value=a.cover||'';quillEditor.root.innerHTML=a.content||'';navStudioTab('editor');updateSEOCheck();}catch(err){showToast(err.message,'error')}
-}
-async function deleteArticle(id){if(!requireLogin('menghapus artikel'))return;try{await api('/articles/'+encodeURIComponent(id),{method:'DELETE'});await loadServerArticles();renderStudioDashboard();showToast('Artikel dihapus dari database.')}catch(err){showToast(err.message,'error')}}
-async function updateDashboardStats(){
-    if(!currentUser){document.getElementById('stat-total-articles').innerText='0';document.getElementById('stat-total-views').innerText='0';document.getElementById('stat-total-users').innerText=String(window.__serverStats?.users||0);document.getElementById('stat-est-revenue').innerText='Belum tersedia';return}
-    try{const d=await api('/analytics/dashboard');document.getElementById('stat-total-articles').innerText=Number(d.totalArticles||0).toLocaleString('id-ID');document.getElementById('stat-total-views').innerText=Number(d.totalViews||0).toLocaleString('id-ID');document.getElementById('stat-est-revenue').innerText='Belum tersedia';document.getElementById('stat-active-ads').innerText=String(d.activeSlots||0);document.getElementById('ads-active-badge').innerText=`${d.activeSlots||0} Artikel`;state.articles=(d.articles||[]).map(serverArticleToUi).concat(state.articles.filter(a=>!d.articles.some(x=>String(x.id)===String(a.id))));updateSidebarWidgetStats()}catch{}
-}
-async function updateSidebarWidgetStats(){const w=document.getElementById('widget-est-earning'),v=document.getElementById('widget-total-views'),a=document.getElementById('widget-active-ads-count');if(w)w.innerText='Belum tersedia';if(!currentUser){if(v)v.innerText='0';if(a)a.innerText='0';return}try{const d=await api('/analytics/dashboard');if(v)v.innerText=Number(d.totalViews||0).toLocaleString('id-ID');if(a)a.innerText=String(d.activeSlots||0)}catch{}}
-async function refreshFactualMetrics(){try{window.__serverStats=await api('/stats');const n=document.getElementById('live-readers-count');if(n)n.innerText=window.__serverStats.online??0;const u=document.getElementById('stat-total-users');if(u)u.innerText=window.__serverStats.users??0;const st=document.getElementById('account-data-status');if(st)st.innerText='Database server — data global';updateSidebarWidgetStats();if(currentViewMode==='portal')renderTrendingList()}catch{}}
-function startServerRealtime(){
-    try{serverRealtimeSource?.close()}catch{}
-    serverRealtimeSource=new EventSource(ARUSTREN_API+'/realtime');
-    serverRealtimeSource.addEventListener('articles',()=>loadServerArticles().catch(()=>{}));
-    serverRealtimeSource.addEventListener('analytics',()=>{refreshFactualMetrics();updateDashboardStats()});
-    serverRealtimeSource.addEventListener('engagement',()=>{if(currentActiveArticleId)openReaderModal(currentActiveArticleId);else loadServerArticles().catch(()=>{})});
-    serverRealtimeSource.addEventListener('accounts',refreshFactualMetrics);
-    serverRealtimeSource.onerror=()=>{};
-    const heartbeat=async()=>{try{const d=await api('/analytics/presence',{method:'POST',body:JSON.stringify({visitorId:getVisitorId(),page:currentViewMode})});window.__serverStats=window.__serverStats||{};window.__serverStats.online=d.online;const n=document.getElementById('live-readers-count');if(n)n.innerText=d.online??0}catch{}};
-    heartbeat();clearInterval(serverOnlineTimer);serverOnlineTimer=setInterval(heartbeat,20000);
-}
-window.addEventListener('DOMContentLoaded',async()=>{
-    try{await loadServerMe(); await loadServerArticles();}catch(err){console.warn('Backend belum tersedia:',err.message)}
-    startServerRealtime(); await refreshFactualMetrics();
-});
-</script>
-
-
-<script>
 /* ARUSTREN SUPABASE OVERRIDE — replaces the legacy server bridge */
 (function(){
   const sb=window.supabase?.createClient(window.ARUSTREN_CONFIG?.SUPABASE_URL||'',window.ARUSTREN_CONFIG?.SUPABASE_PUBLISHABLE_KEY||'');
@@ -2644,6 +2547,60 @@ window.addEventListener('DOMContentLoaded',async()=>{
 
   let libraryBooks=[];
   let currentLibraryBookId=null;
+  let globalLibraryPage=1;
+  let globalLibraryTotal=0;
+  let globalLibraryQuery='';
+
+  function renderGlobalBooks(rows){
+    const box=document.getElementById('global-library-grid');
+    if(!box)return;
+    if(!rows.length){
+      box.innerHTML='<div class="col-span-full py-10 text-center text-slate-600 text-xs">Tidak ada buku terbuka yang ditemukan.</div>';
+      return;
+    }
+    box.innerHTML=rows.map(b=>{
+      const cover=b.cover_i?'https://covers.openlibrary.org/b/id/'+b.cover_i+'-M.jpg':'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=500&q=80';
+      const authors=(b.author_name||['Penulis tidak diketahui']).slice(0,2).join(', ');
+      const readable=b.ebook_access==='public'||b.public_scan_b||b.has_fulltext;
+      const url=b.key?('https://openlibrary.org'+b.key):'https://openlibrary.org/';
+      return '<article class="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden hover:border-sky-500/40 transition">'+
+        '<div class="h-44 bg-slate-900 overflow-hidden"><img loading="lazy" src="'+escLibrary(cover)+'" alt="'+escLibrary(b.title||'Buku')+'" class="w-full h-full object-cover" onerror="this.style.display=\'none\'"></div>'+
+        '<div class="p-3 space-y-2"><h4 class="font-bold text-white text-xs line-clamp-2">'+escLibrary(b.title||'Tanpa judul')+'</h4>'+
+        '<p class="text-[10px] text-slate-400 line-clamp-1">'+escLibrary(authors)+'</p>'+
+        '<p class="text-[9px] text-slate-600">'+(b.first_publish_year||'Tahun tidak diketahui')+(readable?' · Bisa dibaca':' · Lihat katalog')+'</p>'+
+        '<a href="'+escLibrary(url)+'" target="_blank" rel="noopener noreferrer" class="block text-center px-3 py-2 rounded-lg '+(readable?'bg-sky-600 hover:bg-sky-500':'bg-slate-800 hover:bg-slate-700')+' text-white text-[10px] font-bold">'+(readable?'Buka & Baca':'Buka Katalog')+' <i class="fa-solid fa-arrow-up-right-from-square ml-1"></i></a></div></article>';
+    }).join('');
+  }
+
+  async function searchGlobalBooks(page=1){
+    const input=document.getElementById('global-library-search');
+    const status=document.getElementById('global-library-status');
+    const grid=document.getElementById('global-library-grid');
+    const q=(input?.value||'').trim()||'novel';
+    if(page<1)return;
+    if(q!==globalLibraryQuery)page=1;
+    globalLibraryQuery=q;globalLibraryPage=page;
+    if(grid)grid.innerHTML='<div class="col-span-full py-10 text-center text-slate-600 text-xs"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Mencari koleksi buku...</div>';
+    if(status)status.innerText='Mengambil katalog buku terbuka...';
+    try{
+      const r=await fetch('/.netlify/functions/book-catalog?q='+encodeURIComponent(q)+'&page='+page+'&limit=20');
+      const d=await r.json();
+      if(!r.ok)throw new Error(d.error||'Katalog buku gagal dimuat.');
+      globalLibraryTotal=Number(d.numFound||0);
+      renderGlobalBooks(d.docs||[]);
+      const maxPage=Math.max(1,Math.ceil(globalLibraryTotal/20));
+      const prev=document.getElementById('global-library-prev'),next=document.getElementById('global-library-next');
+      if(prev)prev.disabled=page<=1;
+      if(next)next.disabled=page>=maxPage;
+      const pg=document.getElementById('global-library-page');if(pg)pg.innerText='Halaman '+page+' dari '+maxPage.toLocaleString('id-ID');
+      if(status)status.innerText=globalLibraryTotal.toLocaleString('id-ID')+' hasil katalog. Hanya hasil yang memiliki akses eBook terbuka yang diprioritaskan.';
+    }catch(e){
+      if(status)status.innerText='Katalog belum dapat dimuat.';
+      if(grid)grid.innerHTML='<div class="col-span-full py-10 text-center text-rose-400 text-xs">'+escLibrary(e.message)+'</div>';
+    }
+  }
+
+
   let currentLibraryPage=1;
 
   const escLibrary=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -2796,7 +2753,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
 
   Object.assign(window,{loadServerMe:me,submitAuth:auth,logoutUser:logout,loadServerArticles:articles,openReaderModal:reader,saveArticle:save,editArticle:edit,deleteArticle:del,addArticleLike:()=>react('suka'),triggerReaction:react,submitUserComment:comment,updateDashboardStats:dash,updateSidebarWidgetStats:dash,refreshFactualMetrics:metrics,startServerRealtime:realtime,shareCurrentArticle,openLibrary,renderLibraryBooks,openLibraryBook,closeLibraryReader,openLibraryBookForm,closeLibraryBookForm,saveLibraryBook,submitLibraryComment,shareCurrentLibraryPage,changeLibraryPage,goToLibraryPage});
   sb.auth.onAuthStateChange((_e,s)=>{currentUser=s?.user?{id:s.user.id,email:s.user.email}:null;updateAuthUI()});
-  document.addEventListener('DOMContentLoaded',async()=>{try{await me();await articles();await metrics();await loadLibraryBooks();await realtime();const params=new URLSearchParams(window.location.search);const shared=params.get('artikel');const lib=params.get('perpus');const page=params.get('halaman')||'1';if(shared&&isUuid(shared))await reader(shared);else if(lib&&isUuid(lib)){openLibrary();await openLibraryBook(lib,page)}}catch(x){console.warn('Supabase:',x.message)}});
+  document.addEventListener('DOMContentLoaded',async()=>{try{await me();await articles();await metrics();await loadLibraryBooks();const params=new URLSearchParams(window.location.search);const shared=params.get('artikel');const lib=params.get('perpus');const page=params.get('halaman')||'1';if(shared&&isUuid(shared))await reader(shared);else if(lib&&isUuid(lib)){openLibrary();await openLibraryBook(lib,page)}}catch(x){console.warn('Supabase:',x.message)}});
 })();
 </script>
 </body>
