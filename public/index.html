@@ -2753,7 +2753,7 @@ Requirements:
 
   Object.assign(window,{loadServerMe:me,submitAuth:auth,logoutUser:logout,loadServerArticles:articles,openReaderModal:reader,saveArticle:save,editArticle:edit,deleteArticle:del,addArticleLike:()=>react('suka'),triggerReaction:react,submitUserComment:comment,updateDashboardStats:dash,updateSidebarWidgetStats:dash,refreshFactualMetrics:metrics,startServerRealtime:realtime,shareCurrentArticle,openLibrary,renderLibraryBooks,openLibraryBook,closeLibraryReader,openLibraryBookForm,closeLibraryBookForm,saveLibraryBook,submitLibraryComment,shareCurrentLibraryPage,changeLibraryPage,goToLibraryPage});
   sb.auth.onAuthStateChange((_e,s)=>{currentUser=s?.user?{id:s.user.id,email:s.user.email}:null;updateAuthUI()});
-  document.addEventListener('DOMContentLoaded',async()=>{try{await me();await articles();await metrics();await loadLibraryBooks();const params=new URLSearchParams(window.location.search);const shared=params.get('artikel');const lib=params.get('perpus');const page=params.get('halaman')||'1';if(shared&&isUuid(shared))await reader(shared);else if(lib&&isUuid(lib)){openLibrary();await openLibraryBook(lib,page)}}catch(x){console.warn('Supabase:',x.message)}});
+  document.addEventListener('DOMContentLoaded',async()=>{try{await me();await articles();await metrics();await loadLibraryBooks();await realtime();const params=new URLSearchParams(window.location.search);const shared=params.get('artikel');const lib=params.get('perpus');const page=params.get('halaman')||'1';if(shared&&isUuid(shared))await reader(shared);else if(lib&&isUuid(lib)){openLibrary();await openLibraryBook(lib,page)}}catch(x){console.warn('Supabase:',x.message)}});
 })();
 </script>
 </body>
