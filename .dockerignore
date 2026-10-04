@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+*.pyc
+*.log
+.vscode/
+.idea/
+README.local.md
