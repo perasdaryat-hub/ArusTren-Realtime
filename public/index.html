@@ -469,9 +469,7 @@
                         <button type="button" onclick="openAIModal('title')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center transition">
                             <i class="fa-solid fa-lightbulb text-amber-400 mr-2"></i> Ide Judul
                         </button>
-                        <button type="button" onclick="generateAICoverImage()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center transition">
-                            <i class="fa-solid fa-image text-emerald-400 mr-2"></i> Cover AI
-                        </button>
+                        
                     </div>
                 </div>
 
@@ -515,7 +513,7 @@
                     </div>
 
                     <div>
-                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Gambar Cover Utama (URL atau AI)</label>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Gambar Cover Utama (otomatis dari AI atau URL)</label>
                         <div class="flex gap-2">
                             <input type="text" id="input-cover" placeholder="https://images.unsplash.com/..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-sky-500 transition text-sm">
                             <button type="button" onclick="previewCover()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-semibold">Pratinjau</button>
@@ -2159,13 +2157,29 @@
                 : 'Buat 5 ide judul berita yang informatif, menarik, natural, dan ramah SEO dalam bahasa Indonesia. Beri nomor 1 sampai 5 dan jangan membuat klaim fakta yang tidak ada di topik.';
 
             try {
+                document.getElementById('ai-loading-text').innerText = 'AI sedang menyusun artikel...';
                 const resultText = stripMarkdownFences(await callAIProvider(cfg.provider, cfg.model, cfg.apiKey, prompt, systemPrompt, cfg.customUrl));
                 if (!resultText) throw new Error('AI tidak mengembalikan teks.');
 
                 if (aiMode === 'article') {
                     quillEditor.root.innerHTML = resultText;
-                    if (!document.getElementById('input-title').value) document.getElementById('input-title').value = prompt.split('\n')[0].slice(0, 120);
-                    showToast(`Artikel berhasil dibuat dengan ${cfg.provider.toUpperCase()}!`);
+
+                    const titleInput = document.getElementById('input-title');
+                    if (!titleInput.value) titleInput.value = prompt.split('\n')[0].slice(0, 120);
+                    const articleTitle = titleInput.value.trim() || prompt.split('\n')[0].slice(0, 120);
+
+                    if (cfg.provider === 'gemini') {
+                        document.getElementById('ai-loading-text').innerText = 'Artikel selesai. AI sedang membuat cover 16:9...';
+                        try {
+                            const coverCreated = await generateAICoverImageForArticle(articleTitle, cfg.provider, cfg.apiKey);
+                            showToast(coverCreated ? 'Artikel + cover AI berhasil dibuat!' : 'Artikel berhasil dibuat.');
+                        } catch (coverError) {
+                            console.warn('Cover AI gagal:', coverError);
+                            showToast('Artikel berhasil dibuat, tetapi cover AI gagal: ' + (coverError.message || 'kesalahan gambar'), 'info');
+                        }
+                    } else {
+                        showToast(`Artikel berhasil dibuat dengan ${cfg.provider.toUpperCase()}! Cover otomatis tersedia jika provider Gemini dipilih.`);
+                    }
                 } else {
                     alert(`Rekomendasi Judul dari ${cfg.provider.toUpperCase()}:\n\n${resultText}`);
                 }
@@ -2176,45 +2190,53 @@
             } finally {
                 document.getElementById('ai-loading').classList.add('hidden');
                 document.getElementById('btn-generate-ai').disabled = false;
+                document.getElementById('ai-loading-text').innerText = 'AI sedang menyusun berita lengkap...';
             }
         }
 
-        async function generateAICoverImage() {
-            const title = document.getElementById('input-title').value.trim();
-            if (!title) {
-                showToast('Isi judul artikel terlebih dahulu!', 'error');
-                return;
-            }
+        async function generateAICoverImageForArticle(title, provider, apiKey) {
+            if (!title || provider !== 'gemini' || !apiKey) return false;
 
-            showToast('Membuat gambar Cover AI...');
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent?key=${apiKey}`;
+            const coverPrompt = `Create a professional 16:9 editorial news cover image for this Indonesian news article:
+"${title}"
 
-            try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: `A high quality news editorial illustration banner for: ${title}. 16:9 ratio.` }] }],
-                        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
-                    })
-                });
-                const result = await response.json();
-                const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+Requirements:
+- realistic editorial/news photography or polished editorial illustration
+- visually connected to the topic
+- clean composition suitable for a news website
+- no watermark-like text, no fake logos, no misleading claims
+- do not place a long article title inside the image
+- high quality, modern and natural
+- aspect ratio 16:9`;
 
-                if (base64Data) {
-                    const imageUrl = `data:image/png;base64,${base64Data}`;
-                    document.getElementById('input-cover').value = imageUrl;
-                    document.getElementById('img-cover-preview').src = imageUrl;
-                    document.getElementById('cover-preview-box').classList.remove('hidden');
-                    showToast('Cover AI berhasil dibuat!');
-                } else {
-                    showToast('Gagal menghasilkan gambar AI', 'error');
-                }
-            } catch (err) {
-                console.error(err);
-                showToast('Gagal memanggil API Gambar AI', 'error');
-            }
+            const url = 'https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent';
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': apiKey
+                },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: coverPrompt }] }],
+                    generationConfig: {
+                        responseModalities: ['IMAGE'],
+                        responseFormat: { image: { aspectRatio: '16:9', imageSize: '1K' } }
+                    }
+                })
+            });
+
+            const result = await response.json();
+            if (!response.ok) throw new Error(result?.error?.message || `Gemini Cover HTTP ${response.status}`);
+
+            const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+            const mimeType = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.mimeType || 'image/png';
+            if (!base64Data) throw new Error('Gemini tidak mengembalikan gambar cover.');
+
+            const imageUrl = `data:${mimeType};base64,${base64Data}`;
+            document.getElementById('input-cover').value = imageUrl;
+            document.getElementById('img-cover-preview').src = imageUrl;
+            document.getElementById('cover-preview-box').classList.remove('hidden');
+            return true;
         }
 
         function previewCover() {
