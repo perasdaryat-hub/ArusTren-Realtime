@@ -1413,7 +1413,7 @@
 
             container.innerHTML = `
                 <!-- Main Big Hero Card -->
-                <div class="lg:col-span-2 relative rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 group h-[380px] sm:h-[440px] cursor-pointer shadow-2xl" onclick="openReaderModal(${hero.id})">
+                <div class="lg:col-span-2 relative rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 group h-[380px] sm:h-[440px] cursor-pointer shadow-2xl" onclick="openReaderModal('${hero.id}')">
                     <img src="${hero.cover}" alt="${hero.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500 opacity-70">
                     <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent p-6 sm:p-8 flex flex-col justify-end space-y-3">
                         <div class="flex items-center space-x-2">
@@ -1439,7 +1439,7 @@
                 <!-- Secondary Headlines Stack -->
                 <div class="space-y-4 flex flex-col justify-between">
                     ${secondary.map(art => `
-                        <div onclick="openReaderModal(${art.id})" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex gap-4 hover:border-sky-500/50 cursor-pointer transition group flex-1">
+                        <div onclick="openReaderModal('${art.id}')" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex gap-4 hover:border-sky-500/50 cursor-pointer transition group flex-1">
                             <img src="${art.cover}" class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover flex-shrink-0 group-hover:scale-105 transition">
                             <div class="flex flex-col justify-between">
                                 <div>
@@ -1487,7 +1487,7 @@
             container.innerHTML = list.map(art => `
                 <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden hover:border-sky-500/50 transition flex flex-col justify-between group shadow-lg">
                     <div>
-                        <div class="relative h-44 overflow-hidden bg-slate-950 cursor-pointer" onclick="openReaderModal(${art.id})">
+                        <div class="relative h-44 overflow-hidden bg-slate-950 cursor-pointer" onclick="openReaderModal('${art.id}')">
                             <img src="${art.cover}" alt="${art.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
                             <span class="absolute top-3 left-3 bg-slate-950/80 backdrop-blur text-sky-300 text-[10px] font-bold px-2.5 py-1 rounded-full border border-sky-500/30">
                                 ${art.category}
@@ -1495,7 +1495,7 @@
                         </div>
 
                         <div class="p-5 space-y-2">
-                            <h3 onclick="openReaderModal(${art.id})" class="font-bold text-white text-sm sm:text-base line-clamp-2 leading-snug group-hover:text-sky-300 cursor-pointer transition">
+                            <h3 onclick="openReaderModal('${art.id}')" class="font-bold text-white text-sm sm:text-base line-clamp-2 leading-snug group-hover:text-sky-300 cursor-pointer transition">
                                 ${art.title}
                             </h3>
                             <p class="text-xs text-slate-400 line-clamp-2">${art.excerpt}</p>
@@ -1509,7 +1509,7 @@
                             <span><i class="fa-solid fa-heart text-rose-400 mr-1"></i> ${art.likes || 0}</span>
                         </div>
 
-                        <button onclick="openReaderModal(${art.id})" class="px-3 py-1 bg-sky-600/20 text-sky-300 hover:bg-sky-600 hover:text-white rounded-lg font-bold transition text-xs flex items-center">
+                        <button onclick="openReaderModal('${art.id}')" class="px-3 py-1 bg-sky-600/20 text-sky-300 hover:bg-sky-600 hover:text-white rounded-lg font-bold transition text-xs flex items-center">
                             Baca Berita <i class="fa-solid fa-arrow-right ml-1"></i>
                         </button>
                     </div>
@@ -1525,7 +1525,7 @@
             const sorted = [...state.articles].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5);
 
             container.innerHTML = sorted.map((art, idx) => `
-                <div onclick="openReaderModal(${art.id})" class="flex items-center space-x-3 p-2 rounded-xl hover:bg-slate-800/60 cursor-pointer transition group">
+                <div onclick="openReaderModal('${art.id}')" class="flex items-center space-x-3 p-2 rounded-xl hover:bg-slate-800/60 cursor-pointer transition group">
                     <span class="w-7 h-7 rounded-lg bg-slate-800 font-extrabold text-xs text-sky-400 flex items-center justify-center flex-shrink-0 group-hover:bg-sky-600 group-hover:text-white transition">
                         #${idx + 1}
                     </span>
@@ -1592,7 +1592,7 @@
             document.getElementById('read-author').innerText = art.author;
             document.getElementById('read-date').innerText = art.date;
             document.getElementById('read-time').innerText = art.readTime || '3 min baca';
-            document.getElementById('read-cover-img').src = art.cover;
+            document.getElementById('read-cover-img').src = art.cover || ''; document.getElementById('read-cover-img').alt = art.title || 'Cover berita'; document.getElementById('read-cover-box').classList.toggle('hidden', !art.cover);
             document.getElementById('read-views-count').innerText = art.views;
             document.getElementById('read-likes-count').innerText = art.likes || 0;
             document.getElementById('read-summary').innerText = art.summary || art.excerpt;
@@ -2223,6 +2223,7 @@
                     const titleInput = document.getElementById('input-title');
                     if (!titleInput.value) titleInput.value = prompt.split('\n')[0].slice(0, 120);
                     const articleTitle = titleInput.value.trim() || prompt.split('\n')[0].slice(0, 120);
+                    document.getElementById('ai-loading-text').innerText = 'Artikel selesai. Menyiapkan cover AI otomatis...';
 
                     if (cfg.provider === 'gemini') {
                         document.getElementById('ai-loading-text').innerText = 'Artikel selesai. AI sedang membuat cover 16:9...';
@@ -2265,7 +2266,7 @@ Requirements:
 - high quality, modern and natural
 - aspect ratio 16:9`;
 
-            const url = 'https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent';
+            const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent';
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -2291,6 +2292,7 @@ Requirements:
             const imageUrl = `data:${mimeType};base64,${base64Data}`;
             document.getElementById('input-cover').value = imageUrl;
             document.getElementById('img-cover-preview').src = imageUrl;
+            document.getElementById('img-cover-preview').alt = `Cover AI: ${title}`;
             document.getElementById('cover-preview-box').classList.remove('hidden');
             return true;
         }
