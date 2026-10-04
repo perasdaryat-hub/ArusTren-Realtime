@@ -2077,10 +2077,15 @@
             }
 
             if (provider === 'xkiro') {
-                const url = 'https://api.xkiro.com/v1/chat/completions';
-                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }], temperature: 0.75, max_tokens: 6000 }) });
-                const data = await res.json();
-                if (!res.ok) throw new Error(data?.error?.message || `xKiro HTTP ${res.status}`);
+                // xKiro dipanggil lewat Netlify Function agar browser tidak terkena masalah CORS
+                // dan API key tidak perlu dikirim langsung ke domain xKiro dari client.
+                const res = await fetch('/.netlify/functions/xkiro-chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ apiKey, model, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }], temperature: 0.75, max_tokens: 6000 })
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data?.error?.message || data?.error || `xKiro HTTP ${res.status}`);
                 return data?.choices?.[0]?.message?.content || '';
             }
 
@@ -2099,9 +2104,11 @@
             const btn = document.getElementById('btn-xkiro-models');
             btn.disabled = true; btn.innerText = 'Memuat...';
             try {
-                const res = await fetch('https://api.xkiro.com/v1/models');
-                const data = await res.json();
-                if (!res.ok) throw new Error(data?.error?.message || `xKiro HTTP ${res.status}`);
+                // Katalog model xKiro diambil melalui Netlify Function untuk menghindari CORS browser.
+                // Endpoint /v1/models xKiro bersifat publik dan tidak membutuhkan API key.
+                const res = await fetch('/.netlify/functions/xkiro-models', { cache: 'no-store' });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(data?.error?.message || data?.error || `xKiro HTTP ${res.status}`);
                 const models = Array.isArray(data?.data) ? data.data.filter(m => m?.modality === 'chat' || !m?.modality) : [];
                 if (models.length) {
                     const model = models.find(m => m.id === document.getElementById('ai-model').value) || models[0];
