@@ -1226,36 +1226,7 @@
         if (!state.ai.model) state.ai.model = 'gemini-3.8-flash';
         if (!state.ai.customUrl) state.ai.customUrl = '';
         localStorage.setItem('arustren_ai', JSON.stringify(state.ai));
-
-        // ON PAGE LOAD INITIALIZATION
-        window.addEventListener('DOMContentLoaded', () => {
-            // Initialize Quill Editor
-            quillEditor = new Quill('#editor-container', {
-                theme: 'snow',
-                placeholder: 'Tuliskan isi narasi berita terlengkap di sini...'
-            });
-            document.getElementById('input-title')?.addEventListener('input', updateSEOCheck);
-            document.getElementById('input-tags')?.addEventListener('input', updateSEOCheck);
-            quillEditor.on('text-change', updateSEOCheck);
-
-            initializeGoogleAdSense();
-            currentUser = getCurrentUser();
-            updateAuthUI();
-
-            // Set Current Date Display
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
-            document.getElementById('current-date-display').innerText = dateStr;
-
-            // Load Ads Fields & Setup UI
-            populateAdSettingsFields();
-            applyAdsToLayout();
-            renderPortalView();
-            renderStudioDashboard();
-
-            // Refresh factual metrics; no random/simulated traffic.
-            refreshFactualMetrics();
-        });
+        // ON PAGE LOAD INITIALIZATION is handled by the single Supabase startup path at the end.
 
         // TOAST NOTIFICATION SYSTEM
         function showToast(message, type = 'success') {
@@ -2382,7 +2353,9 @@ function startServerRealtime(){
   const sid=()=>{let x=sessionStorage.getItem(S);if(!x){x='ses_'+crypto.randomUUID();sessionStorage.setItem(S,x)}return x};
   const map=a=>{const rs=a.reactions||[],cs=a.comments||[],r={suka:0,informatif:0,kagum:0};rs.forEach(x=>{if(r[x.type]!==undefined)r[x.type]++});return {...a,ownerId:a.owner_id,cover:a.image_url||'',author:a.author||'Redaksi ArusTren',readTime:a.read_time||'1 mnt',summary:a.summary||a.excerpt||'',tags:Array.isArray(a.tags)?a.tags.join(', '):(a.tags||''),adsenseSlot:a.adsense_slot||'',likes:r.suka,views:+a.views||0,reactions:r,comments:cs.map(x=>({id:x.id,name:x.author_name||'Pengunjung',city:'Indonesia',text:x.content,time:x.created_at?new Date(x.created_at).toLocaleString('id-ID'):'Baru saja'})),date:a.created_at?new Date(a.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):''}};
   async function me(){const {data:{user}}=await sb.auth.getUser();currentUser=user?{id:user.id,email:user.email}:null;updateAuthUI();return currentUser}
-  async function articles(){const {data,error}=await sb.from('articles').select('*,comments(*),reactions(*)').order('created_at',{ascending:false});if(error)throw error;state.articles=(data||[]).map(map);renderPortalView();renderStudioDashboard();await dash();return state.articles}
+  let articleRefreshTimer=null;
+  async function articles(){const {data,error}=await sb.from('articles').select('*,comments(*),reactions(*)').order('created_at',{ascending:false});if(error)throw error;state.articles=(data||[]).map(map);renderPortalView();if(currentViewMode==='studio')renderStudioDashboard();return state.articles}
+  function scheduleArticleRefresh(){clearTimeout(articleRefreshTimer);articleRefreshTimer=setTimeout(()=>articles().catch(()=>{}),300)}
   async function one(id){if(!isUuid(id))throw Error('ID artikel tidak valid. Silakan muat ulang halaman.');const {data,error}=await sb.from('articles').select('*,comments(*),reactions(*)').eq('id',id).maybeSingle();if(error)throw error;if(!data)throw Error('Artikel tidak ditemukan.');return map(data)}
   async function auth(e){e.preventDefault();const email=normalizeGmail(document.getElementById('auth-email').value),password=document.getElementById('auth-password').value,confirm=document.getElementById('auth-confirm').value;if(!isValidGmail(email))return showToast('Gunakan alamat Gmail yang valid (@gmail.com).','error');if(password.length<8)return showToast('Sandi minimal 8 karakter.','error');if(authMode==='register'&&password!==confirm)return showToast('Konfirmasi sandi tidak sama.','error');try{let x=authMode==='register'?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});if(x.error)throw x.error;if(x.data.session){currentUser={id:x.data.user.id,email:x.data.user.email};if(authMode==='login')await sb.rpc('touch_last_login');closeAuthModal();updateAuthUI();showToast(authMode==='register'?'Akun berhasil dibuat dan langsung login.':'Login berhasil.')}else{closeAuthModal();showToast('Akun berhasil dibuat. Silakan login jika sesi belum terbentuk.','info')}await articles();await metrics()}catch(x){showToast(x.message||'Autentikasi gagal.','error')}}
   async function logout(){await sb.auth.signOut();currentUser=null;updateAuthUI();switchViewMode('portal');showToast('Kamu sudah logout.')}
@@ -2394,10 +2367,13 @@ function startServerRealtime(){
   async function comment(e){e.preventDefault();if(!currentActiveArticleId||!requireLogin('mengirim komentar'))return;const {data:{user}}=await sb.auth.getUser(),text=document.getElementById('comment-text').value.trim(),name=document.getElementById('comment-author').value.trim()||user.email.split('@')[0];if(!text)return;const x=await sb.from('comments').insert({article_id:currentActiveArticleId,user_id:user.id,author_name:name,content:text});if(x.error)return showToast(x.error.message,'error');const a=await one(currentActiveArticleId);const i=state.articles.findIndex(x=>x.id===a.id);if(i>=0)state.articles[i]=a;renderArticleComments(a);document.getElementById('comment-text').value='';showToast('Komentar dipublikasikan!')}
   async function dash(){if(!currentUser){['stat-total-articles','stat-total-views'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerText='0'});return}const {data}=await sb.from('articles').select('views,adsense_slot').eq('owner_id',currentUser.id),rows=data||[],v=rows.reduce((s,x)=>s+(+x.views||0),0),slots=rows.filter(x=>x.adsense_slot).length;const set=(id,val)=>{const e=document.getElementById(id);if(e)e.innerText=val};set('stat-total-articles',rows.length);set('stat-total-views',v.toLocaleString('id-ID'));set('stat-est-revenue','Belum tersedia');set('stat-active-ads',slots);set('ads-active-badge',slots+' Artikel');set('widget-total-views',v.toLocaleString('id-ID'));set('widget-active-ads-count',slots);set('widget-est-earning','Belum tersedia')}
   async function metrics(){const x=await sb.from('profiles').select('id',{count:'exact',head:true});window.__supabaseUsers=x.count||0;const e=document.getElementById('stat-total-users');if(e)e.innerText=String(window.__supabaseUsers);const s=document.getElementById('account-data-status');if(s)s.innerText='Supabase — data global';await dash()}
-  async function realtime(){const refresh=()=>{articles().catch(()=>{});metrics().catch(()=>{})};['articles','comments','reactions'].forEach(t=>sb.channel('arustren-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},refresh).subscribe());const c=sb.channel('arustren-online',{config:{presence:{key:vid()}}});c.on('presence',{event:'sync'},()=>{window.__supabaseOnline=Object.keys(c.presenceState()).length;const a=document.getElementById('live-readers-count'),b=document.getElementById('read-active-users-num');if(a)a.innerText=window.__supabaseOnline;if(b)b.innerText=window.__supabaseOnline}).subscribe(async st=>{if(st==='SUBSCRIBED')await c.track({page:currentViewMode,at:new Date().toISOString()})})}
+  async function realtime(){const refresh=()=>scheduleArticleRefresh();['articles','comments','reactions'].forEach(t=>sb.channel('arustren-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},refresh).subscribe());const c=sb.channel('arustren-online',{config:{presence:{key:vid()}}});c.on('presence',{event:'sync'},()=>{window.__supabaseOnline=Object.keys(c.presenceState()).length;const a=document.getElementById('live-readers-count'),b=document.getElementById('read-active-users-num');if(a)a.innerText=window.__supabaseOnline;if(b)b.innerText=window.__supabaseOnline}).subscribe(async st=>{if(st==='SUBSCRIBED')await c.track({page:currentViewMode,at:new Date().toISOString()})})}
   Object.assign(window,{loadServerMe:me,submitAuth:auth,logoutUser:logout,loadServerArticles:articles,openReaderModal:reader,saveArticle:save,editArticle:edit,deleteArticle:del,addArticleLike:()=>react('suka'),triggerReaction:react,submitUserComment:comment,updateDashboardStats:dash,updateSidebarWidgetStats:dash,refreshFactualMetrics:metrics,startServerRealtime:realtime});
   sb.auth.onAuthStateChange((_e,s)=>{currentUser=s?.user?{id:s.user.id,email:s.user.email}:null;updateAuthUI()});
-  document.addEventListener('DOMContentLoaded',async()=>{try{await me();await articles();await metrics();await realtime()}catch(x){console.warn('Supabase:',x.message)}});
+  document.addEventListener('DOMContentLoaded',async()=>{
+    try{initializeArusTrenUI();await me();await articles();await metrics();await realtime()}
+    catch(x){console.warn('Supabase:',x.message)}
+});
 })();
 </script>
 </body>
