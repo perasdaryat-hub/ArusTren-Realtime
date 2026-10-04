@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- Google AdSense Account Verification -->
+    <meta name="google-adsense-account" content="ca-pub-5462727366652523">
+
+    <!-- Google AdSense Auto Ads -->
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5462727366652523" crossorigin="anonymous"></script>
+
+    <title>ArusTren - Portal Berita Resmi & Dynamic Publisher Studio</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                            800: '#0c4a6e',
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'ticker': 'ticker 25s linear infinite',
+                    },
+                    keyframes: {
+                        ticker: {
+                            '0%': { transform: 'translateX(0%)' },
+                            '100%': { transform: 'translateX(-50%)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Google Fonts Inter & Merriweather for Editorial Reading -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
+
+    <!-- Quill.js Rich Text Editor -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .article-body { font-family: 'Merriweather', serif; font-size: 1.05rem; line-height: 1.85; }
+        .ql-editor { min-height: 250px; font-size: 16px; line-height: 1.7; }
+        .ql-toolbar.ql-snow { border-top-left-radius: 0.75rem; border-top-right-radius: 0.75rem; background-color: #f8fafc; }
+        .ql-container.ql-snow { border-bottom-left-radius: 0.75rem; border-bottom-right-radius: 0.75rem; }
+        .dark .ql-toolbar.ql-snow { background-color: #1e293b; border-color: #334155; color: #f1f5f9; }
+        .dark .ql-container.ql-snow { border-color: #334155; color: #f1f5f9; background-color: #0f172a; }
+        .dark .ql-stroke { stroke: #cbd5e1 !important; }
+        .dark .ql-fill { fill: #cbd5e1 !important; }
+        .dark .ql-picker { color: #cbd5e1 !important; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0b1329; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #0284c7; }
+
+        /* Article Reading Progress Bar */
+        #reading-progress { transition: width 0.1s ease-out; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-sky-500 selection:text-white">
+
+    <!-- Floating Toast Notification Box -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- TOP REALTIME TICKER BAR (Warna Berita Resmi) -->
+    <div class="bg-slate-900 border-b border-slate-800/80 py-1.5 px-4 text-xs">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <!-- Breaking News Ticker -->
+            <div class="flex items-center space-x-3 overflow-hidden mr-4">
+                <span class="bg-rose-600 text-white font-extrabold px-2 py-0.5 rounded text-[10px] tracking-wider uppercase flex-shrink-0 animate-pulse">
+                    <i class="fa-solid fa-bolt mr-1"></i> BREAKING
+                </span>
+                <div class="truncate text-slate-300 font-medium text-[11px]" id="ticker-text">
+                    ArusTren Resmi Mengumumkan Fitur Realtime Publisher & Monetisasi AdSense Terintegrasi.
+                </div>
+            </div>
+
+            <!-- Realtime Metrics Pills -->
+            <div class="flex items-center space-x-4 flex-shrink-0 text-[11px] font-semibold">
+                <div class="flex items-center space-x-1.5 text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span><strong id="live-readers-count">--</strong> Pembaca Online</span>
+                </div>
+                <div class="hidden sm:flex items-center space-x-1 text-slate-400">
+                    <i class="fa-solid fa-calendar-days text-sky-400 mr-1"></i>
+                    <span id="current-date-display">Minggu, 04 Okt 2026</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN BRAND HEADER & DUAL MODE SWITCH -->
+    <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between gap-4">
+            
+            <!-- Logo & Official Tagline -->
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="switchViewMode('portal')">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-500 via-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-sky-500/20 transform hover:scale-105 transition">
+                    A
+                </div>
+                <div>
+                    <div class="flex items-center space-x-2">
+                        <h1 class="font-black text-xl md:text-2xl tracking-tight text-white font-mono">ArusTren<span class="text-sky-400">.id</span></h1>
+                        <span class="bg-sky-500/20 text-sky-300 text-[10px] font-bold px-2 py-0.5 rounded-md border border-sky-500/30">VERIFIED PORTAL</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 font-medium hidden sm:block">Portal Berita Digital & Platform Media Terpercaya</p>
+                </div>
+            </div>
+
+            <!-- Navigation Mode Toggle Button (Public News Portal vs Publisher Studio) -->
+            <div class="flex items-center space-x-3">
+                <div class="bg-slate-950 p-1 rounded-2xl border border-slate-800 flex items-center">
+                    <button id="btn-mode-portal" onclick="switchViewMode('portal')" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 bg-sky-600 text-white shadow-md">
+                        <i class="fa-solid fa-newspaper"></i>
+                        <span class="hidden md:inline">Website Resmi</span>
+                    </button>
+                    <button id="btn-mode-studio" onclick="switchViewMode('studio')" class="px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 text-slate-400 hover:text-white">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span class="hidden md:inline">Studio Publisher</span>
+                        <span id="studio-badge-dot" class="w-2 h-2 rounded-full bg-emerald-400 ml-1"></span>
+                    </button>
+                </div>
+
+                <button onclick="openNewArticleEditor()" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center shadow-lg shadow-emerald-600/20 transition">
+                    <i class="fa-solid fa-pen-nib mr-2"></i> Tulis Berita
+                </button>
+                <div id="auth-user-area" class="flex items-center gap-2">
+                    <button id="btn-auth-login" onclick="openAuthModal('login')" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold transition">
+                        <i class="fa-solid fa-right-to-bracket mr-1"></i> Login
+                    </button>
+                    <button id="btn-auth-register" onclick="openAuthModal('register')" class="px-3 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition">
+                        <i class="fa-solid fa-user-plus mr-1"></i> Daftar
+                    </button>
+                    <div id="auth-user-chip" class="hidden items-center gap-2">
+                        <span id="auth-user-email" class="max-w-[150px] truncate text-[10px] text-slate-300 bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl"></span>
+                        <button onclick="logoutUser()" class="px-3 py-2 rounded-xl bg-rose-600/15 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/20 text-xs font-bold transition" title="Logout">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CATEGORIES NAVBAR (Public Portal Nav) -->
+        <nav id="portal-cat-nav" class="bg-slate-950 border-t border-slate-800/80 px-4 overflow-x-auto scrollbar-none">
+            <div class="max-w-7xl mx-auto flex items-center space-x-1 py-2 text-xs font-semibold whitespace-nowrap">
+                <button onclick="filterCategory('ALL')" class="cat-nav-btn active px-3.5 py-1.5 rounded-lg text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition">Semua Berita</button>
+                <button onclick="filterCategory('Teknologi & AI')" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">Teknologi & AI</button>
+                <button onclick="filterCategory('Gaya Hidup')" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">Gaya Hidup</button>
+                <button onclick="filterCategory('Pop Culture')" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">Pop Culture</button>
+                <button onclick="filterCategory('Bisnis & Keuangan')" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">Bisnis & Keuangan</button>
+                <button onclick="filterCategory('Edukasi')" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">Edukasi</button>
+                <button onclick="filterCategory('Viral & Hot')" class="cat-nav-btn px-3.5 py-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition flex items-center">
+                    <i class="fa-solid fa-fire mr-1 text-xs"></i> Viral & Hot
+                </button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <div class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-8">
+
+        <!-- Dynamic Leaderboard Ad Banner (Slot Top Header) -->
+        <div id="ad-render-header" class="w-full hidden transition-all duration-300"></div>
+
+        <!-- MODE 1: WEBSITE RESMI (PUBLIC NEWS PORTAL VIEW) -->
+        <main id="view-mode-portal" class="space-y-8">
+            
+            <!-- HERO FEATURED ARTICLE SECTION -->
+            <section id="hero-featured-container" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Injected JS Hero -->
+            </section>
+
+            <!-- MAIN NEWS CONTENT + SIDEBAR GRID -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                <!-- Left 2-Columns: Main News Feed -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Filter and Search Header -->
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                        <div class="flex items-center space-x-2">
+                            <h2 class="font-extrabold text-lg text-white flex items-center">
+                                <i class="fa-solid fa-newspaper text-sky-400 mr-2"></i> Indeks Berita Terbaru
+                            </h2>
+                            <span id="active-cat-label" class="text-xs bg-slate-800 text-slate-400 px-2.5 py-0.5 rounded-full">Semua</span>
+                        </div>
+
+                        <div class="relative w-full sm:w-64">
+                            <input type="text" id="portal-search-input" onkeyup="handleSearch()" placeholder="Cari artikel berita..." class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-500 text-xs"></i>
+                        </div>
+                    </div>
+
+                    <!-- News Grid Cards -->
+                    <div id="portal-news-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Dynamic Injected News -->
+                    </div>
+                </div>
+
+                <!-- Right Column: Official Sidebar Widgets -->
+                <aside class="space-y-6">
+                    
+                    <!-- Sidebar Ad Banner Slot -->
+                    <div id="ad-render-sidebar" class="w-full hidden"></div>
+
+                    <!-- Trending News Rank List Widget -->
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4">
+                        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                            <h3 class="font-bold text-sm text-white flex items-center">
+                                <i class="fa-solid fa-arrow-trend-up text-rose-500 mr-2"></i> Berita Terpopuler
+                            </h3>
+                            <span class="text-[10px] bg-rose-500/20 text-rose-300 font-bold px-2 py-0.5 rounded">REALTIME RANK</span>
+                        </div>
+                        <div id="trending-list-box" class="space-y-3">
+                            <!-- Injected JS -->
+                        </div>
+                    </div>
+
+                    <!-- Realtime Monetization Analytics Widget -->
+                    <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-sky-950 border border-sky-500/30 rounded-2xl p-5 space-y-4 shadow-xl">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <div class="w-3 h-3 rounded-full bg-emerald-400 animate-ping"></div>
+                                <h3 class="font-bold text-xs text-white uppercase tracking-wider">Metrik Faktual Studio</h3>
+                            </div>
+                            <span class="text-[10px] font-mono text-sky-400">Data Tercatat</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 pt-2">
+                            <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                                <p class="text-[10px] text-slate-400">Pendapatan AdSense</p>
+                                <p id="widget-est-earning" class="text-base font-black text-emerald-400 mt-0.5">Belum tersedia</p>
+                            </div>
+                            <div class="bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+                                <p class="text-[10px] text-slate-400">Total Pembaca</p>
+                                <p id="widget-total-views" class="text-base font-black text-sky-400 mt-0.5">0</p>
+                            </div>
+                        </div>
+
+                        <div class="text-[11px] text-slate-400 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800 space-y-1">
+                            <div class="flex justify-between">
+                                <span>Slot artikel terpasang:</span>
+                                <strong id="widget-active-ads-count" class="text-emerald-400">0</strong>
+                            </div>
+                            <div class="flex justify-between">
+                                <span>Sumber pendapatan:</span>
+                                <strong class="text-slate-200">Laporan AdSense</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Newsletter Subscription Card -->
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3 text-center">
+                        <div class="w-10 h-10 bg-sky-500/10 text-sky-400 rounded-xl flex items-center justify-center mx-auto text-lg">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </div>
+                        <h4 class="font-bold text-sm text-white">Langganan Buletin Harian</h4>
+                        <p class="text-xs text-slate-400">Dapatkan rangkuman berita terpopuler ArusTren langsung di inbox e-mail kamu.</p>
+                        <form onsubmit="handleNewsletter(event)" class="space-y-2 pt-2">
+                            <input type="email" required placeholder="Alamat email kamu..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
+                            <button type="submit" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 rounded-xl text-xs transition shadow-lg shadow-sky-600/20">
+                                Langganan Gratis
+                            </button>
+                        </form>
+                    </div>
+
+                </aside>
+            </div>
+        </main>
+
+        <!-- MODE 2: PUBLISHER STUDIO / PANEL ADMIN VIEW -->
+        <main id="view-mode-studio" class="space-y-8 hidden">
+            
+            <!-- STUDIO NAVIGATION TABS -->
+            <div class="flex items-center space-x-2 border-b border-slate-800 pb-3 overflow-x-auto scrollbar-none">
+                <button onclick="navStudioTab('dashboard')" id="tab-studio-dashboard" class="studio-tab-btn active px-4 py-2 rounded-xl text-xs font-bold bg-sky-600/20 text-sky-300 border border-sky-500/30 flex items-center space-x-2">
+                    <i class="fa-solid fa-chart-pie"></i>
+                    <span>Dashboard & Performa Realtime</span>
+                </button>
+                <button onclick="navStudioTab('editor')" id="tab-studio-editor" class="studio-tab-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-900 transition flex items-center space-x-2">
+                    <i class="fa-solid fa-pen-nib"></i>
+                    <span>Studio Editor AI</span>
+                </button>
+                <button onclick="navStudioTab('ads')" id="tab-studio-ads" class="studio-tab-btn hidden px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-900 transition flex items-center space-x-2">
+                    <i class="fa-solid fa-rectangle-ad"></i>
+                    <span>Slot Iklan AdSense</span>
+                    <span id="ads-active-badge" class="bg-rose-500/20 text-rose-300 text-[10px] px-2 py-0.5 rounded-full font-bold">0 Aktif</span>
+                </button>
+                <button onclick="navStudioTab('syndication')" id="tab-studio-syndication" class="studio-tab-btn px-4 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-900 transition flex items-center space-x-2">
+                    <i class="fa-solid fa-share-nodes"></i>
+                    <span>Cross-Post Media</span>
+                </button>
+            </div>
+
+            <!-- STUDIO TAB 1: DASHBOARD ANALYTICS -->
+            <section id="studio-subview-dashboard" class="space-y-6">
+                <!-- Overview Stats Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium">Total Berita Terbit</p>
+                            <h3 id="stat-total-articles" class="text-2xl font-black text-white mt-1">0</h3>
+                        </div>
+                        <div class="w-12 h-12 bg-sky-500/10 text-sky-400 rounded-2xl flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-file-lines"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium">Views Tercatat</p>
+                            <h3 id="stat-total-views" class="text-2xl font-black text-amber-400 mt-1">0</h3>
+                        </div>
+                        <div class="w-12 h-12 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-eye"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium">Pendapatan AdSense</p>
+                            <h3 id="stat-est-revenue" class="text-2xl font-black text-emerald-400 mt-1">Rp 0</h3>
+                        </div>
+                        <div class="w-12 h-12 bg-emerald-500/10 text-emerald-400 rounded-2xl flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-wallet"></i>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900/80 border border-slate-800 p-5 rounded-2xl flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-slate-400 font-medium">Slot Iklan AdSense</p>
+                            <h3 id="stat-active-ads" class="text-2xl font-black text-purple-400 mt-1">0 / 5</h3>
+                        </div>
+                        <div class="w-12 h-12 bg-purple-500/10 text-purple-400 rounded-2xl flex items-center justify-center text-xl">
+                            <i class="fa-solid fa-rectangle-ad"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-slate-900/80 border border-emerald-500/20 p-4 rounded-2xl">
+                        <div class="flex items-center gap-2 text-emerald-400 text-xs font-bold"><i class="fa-solid fa-shield-check"></i> DATA JUJUR</div>
+                        <p class="text-[11px] text-slate-400 mt-2">Views hanya bertambah saat artikel benar-benar dibuka. Tidak ada angka acak atau simulasi.</p>
+                    </div>
+                    <div class="bg-slate-900/80 border border-sky-500/20 p-4 rounded-2xl">
+                        <div class="flex items-center gap-2 text-sky-400 text-xs font-bold"><i class="fa-solid fa-chart-line"></i> ANALITIK</div>
+                        <p class="text-[11px] text-slate-400 mt-2">Pendapatan tidak dihitung dengan CPM buatan. Angka hanya muncul jika data AdSense nyata tersedia.</p>
+                    </div>
+                    <div class="bg-slate-900/80 border border-purple-500/20 p-4 rounded-2xl">
+                        <div class="flex items-center gap-2 text-purple-400 text-xs font-bold"><i class="fa-solid fa-file-export"></i> EKSPOR</div>
+                        <div class="flex gap-2 mt-2"><button onclick="exportMyAnalytics()" class="flex-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-bold">CSV Analitik</button><button onclick="exportMyArticles()" class="flex-1 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-[11px] font-bold">CSV Artikel</button></div>
+                    </div>
+                </div>
+
+                <!-- Activity Feed and Article Management -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Table / List of Managed Articles -->
+                    <div class="lg:col-span-2 bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-3 gap-3">
+                            <h3 class="font-bold text-white text-base flex items-center">
+                                <i class="fa-solid fa-list text-sky-400 mr-2"></i> Kelola Artikel Berita
+                            </h3>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="backupMyData()" class="text-[11px] px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold"><i class="fa-solid fa-download mr-1"></i> Backup</button>
+                                <button onclick="document.getElementById('restore-data-input').click()" class="text-[11px] px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold"><i class="fa-solid fa-upload mr-1"></i> Restore</button>
+                                <input id="restore-data-input" type="file" accept="application/json" class="hidden" onchange="restoreMyData(event)">
+                                <button onclick="navStudioTab('editor')" class="text-xs text-sky-400 hover:text-sky-300 font-semibold flex items-center px-2">
+                                    <i class="fa-solid fa-plus mr-1"></i> Buat Baru
+                                </button>
+                            </div>
+                        </div>
+                        <div class="relative">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                            <input id="studio-article-search" oninput="filterStudioArticles(this.value)" type="search" placeholder="Cari judul, kategori, atau tag..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-sky-500">
+                        </div>
+                        <div id="studio-articles-list" class="space-y-3">
+                            <!-- Injected JS -->
+                        </div>
+                    </div>
+
+                    <!-- Realtime Activity Log Stream -->
+                    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+                                <h3 class="font-bold text-white text-sm flex items-center">
+                                    <i class="fa-solid fa-tower-cell text-emerald-400 mr-2 animate-pulse"></i> Live Reader Logs
+                                </h3>
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                            </div>
+                            <div id="realtime-logs-container" class="space-y-2.5 max-h-80 overflow-y-auto text-xs">
+                                <!-- Injected JS Log Items -->
+                            </div>
+                        </div>
+
+                        <div class="mt-4 pt-3 border-t border-slate-800 text-[11px] text-slate-500 text-center">
+                            Log lalu lintas hanya menampilkan aktivitas yang benar-benar tercatat oleh sistem. Jumlah pembaca online membutuhkan backend realtime.
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STUDIO TAB 2: ARTICLE EDITOR WITH AI -->
+            <section id="studio-subview-editor" class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-6 hidden">
+                <div class="flex flex-col md:flex-row items-start md:items-center justify-between pb-6 border-b border-slate-800 gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Studio Editor & Asisten Gemini AI</h2>
+                        <p class="text-xs text-slate-400">Susun draf berita berkualitas dengan standar jurnalistik dan bantuan kecerdasan buatan.</p>
+                    </div>
+                    
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" onclick="openAIModal('article')" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center shadow-lg shadow-purple-600/20 transition">
+                            <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> Draf dengan AI
+                        </button>
+                        <button type="button" onclick="openAIModal('title')" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center transition">
+                            <i class="fa-solid fa-lightbulb text-amber-400 mr-2"></i> Ide Judul
+                        </button>
+                        <button type="button" onclick="generateAICoverImage()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center transition">
+                            <i class="fa-solid fa-image text-emerald-400 mr-2"></i> Cover AI
+                        </button>
+                    </div>
+                </div>
+
+                <form id="form-article" onsubmit="saveArticle(event)" class="space-y-5">
+                    <input type="hidden" id="edit-article-id" value="">
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Judul Artikel Berita <span class="text-rose-400">*</span></label>
+                        <input type="text" id="input-title" required placeholder="Contoh: Terobosan AI Terbaru Tahun 2026 yang Mengubah Dunia Kerja..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-sky-500 transition text-sm">
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Kategori Utama</label>
+                            <select id="input-category" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-sky-500 transition text-sm">
+                                <option value="Teknologi & AI">Teknologi & AI</option>
+                                <option value="Gaya Hidup">Gaya Hidup</option>
+                                <option value="Pop Culture">Pop Culture</option>
+                                <option value="Bisnis & Keuangan">Bisnis & Keuangan</option>
+                                <option value="Edukasi">Edukasi</option>
+                                <option value="Viral & Hot">Viral & Hot</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Nama Jurnalis / Penulis</label>
+                            <input type="text" id="input-author" value="Redaksi ArusTren" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-sky-500 transition text-sm">
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Tagar / Keywords</label>
+                            <input type="text" id="input-tags" placeholder="tren, viral, ai, 2026, berita" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-sky-500 transition text-sm">
+                            <div id="seo-checker" class="mt-2 text-[10px] text-slate-500">SEO: isi judul, tag, dan konten untuk pemeriksaan.</div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">AdSense Slot Artikel</label>
+                            <input type="text" id="input-adsense-slot" inputmode="numeric" placeholder="Contoh: 1234567890" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-sky-500 transition text-sm">
+                            <p class="text-[10px] text-slate-500 mt-1">Isi dengan ID Ad Unit AdSense yang berbeda untuk artikel ini. Kosongkan jika ingin memakai Auto Ads.</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Gambar Cover Utama (URL atau AI)</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="input-cover" placeholder="https://images.unsplash.com/..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-sky-500 transition text-sm">
+                            <button type="button" onclick="previewCover()" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-semibold">Pratinjau</button>
+                        </div>
+                        <div id="cover-preview-box" class="mt-3 hidden">
+                            <img id="img-cover-preview" src="" class="h-44 w-full object-cover rounded-xl border border-slate-800">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">Isi Konten Berita</label>
+                        <div id="editor-container"></div>
+                    </div>
+
+                    <!-- Crosspost Target Checkboxes -->
+                    <div class="p-4 bg-slate-950/80 rounded-xl border border-slate-800">
+                        <label class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Publikasi Otomatis ke Platform Luar (Syndication)</label>
+                        <div class="flex flex-wrap gap-4 text-xs">
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" id="check-cross-medium" class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0">
+                                <span class="text-slate-300"><i class="fa-brands fa-medium mr-1 text-white"></i> Medium.com</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" id="check-cross-devto" class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0">
+                                <span class="text-slate-300"><i class="fa-brands fa-dev mr-1 text-purple-400"></i> Dev.to</span>
+                            </label>
+                            <label class="flex items-center space-x-2 cursor-pointer">
+                                <input type="checkbox" id="check-cross-wordpress" class="rounded bg-slate-800 border-slate-700 text-sky-500 focus:ring-0">
+                                <span class="text-slate-300"><i class="fa-brands fa-wordpress mr-1 text-blue-400"></i> External WordPress</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end space-x-3 pt-3">
+                        <button type="button" onclick="switchViewMode('portal')" class="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-semibold text-xs transition">Batal</button>
+                        <button type="submit" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-600/20 transition flex items-center">
+                            <i class="fa-solid fa-paper-plane mr-2"></i> Publikasikan Sekarang
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- STUDIO TAB 3: ADSENSE AD MANAGER -->
+            <section id="studio-subview-ads" class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-6 hidden">
+                <div class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-800 gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-white flex items-center">
+                            <i class="fa-solid fa-rectangle-ad text-rose-500 mr-2"></i> Modul Pengaturan Dynamic AdSense
+                        </h2>
+                        <p class="text-xs text-slate-400">Atur Google AdSense Publisher ID dan slot iklan secara dinamis di seluruh website resmi.</p>
+                    </div>
+                    <button onclick="saveAdSettings()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-5 py-2.5 rounded-xl text-xs shadow-lg shadow-rose-600/20 transition flex items-center">
+                        <i class="fa-solid fa-floppy-disk mr-2"></i> Simpan Konfigurasi Iklan
+                    </button>
+                </div>
+
+                <div class="p-5 bg-slate-950/90 rounded-2xl border border-rose-500/30 space-y-4">
+                    <div class="flex items-center space-x-3 text-rose-300 font-semibold text-sm">
+                        <i class="fa-solid fa-code"></i>
+                        <span>Google AdSense Global Publisher Configuration</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">AdSense Publisher ID (Client ID)</label>
+                            <input type="text" id="ads-pub-id" placeholder="ca-pub-1234567890123456" class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-xs focus:outline-none focus:border-rose-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Auto Ads Script Tag (Opsional)</label>
+                            <input type="text" id="ads-auto-script" placeholder='<script async src="https://pagead2.googlesyndication.com/..."></script>' class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-white text-xs focus:outline-none focus:border-rose-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ad Slots Grid -->
+                <div class="space-y-6">
+                    <!-- Slot 1: Header Top Leaderboard -->
+                    <div class="p-5 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-3 h-3 rounded-full bg-sky-400"></div>
+                                <h4 class="font-bold text-white text-sm">1. Top Header Leaderboard Banner (728x90)</h4>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="slot-header-active" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                <span class="ml-2 text-xs text-slate-300">Aktifkan</span>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <textarea id="slot-header-code" rows="3" placeholder="Masukkan HTML script / banner iklan..." class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono"></textarea>
+                            <div id="preview-slot-header" class="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-center text-xs text-slate-500">Pratinjau Nonaktif</div>
+                        </div>
+                    </div>
+
+                    <!-- Slot 2: In-Article Top -->
+                    <div class="p-5 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-3 h-3 rounded-full bg-emerald-400"></div>
+                                <h4 class="font-bold text-white text-sm">2. Dalam Artikel - Paragraf Atas (Native Banner)</h4>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="slot-arttop-active" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                <span class="ml-2 text-xs text-slate-300">Aktifkan</span>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <textarea id="slot-arttop-code" rows="3" placeholder="Script Iklan Dalam Artikel..." class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono"></textarea>
+                            <div id="preview-slot-arttop" class="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-center text-xs text-slate-500">Pratinjau Nonaktif</div>
+                        </div>
+                    </div>
+
+                    <!-- Slot 3: In-Article Bottom -->
+                    <div class="p-5 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-3 h-3 rounded-full bg-amber-400"></div>
+                                <h4 class="font-bold text-white text-sm">3. Dalam Artikel - Bawah/Akhir Bacaan</h4>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="slot-artbottom-active" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                <span class="ml-2 text-xs text-slate-300">Aktifkan</span>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <textarea id="slot-artbottom-code" rows="3" placeholder="Script Iklan Akhir Artikel..." class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono"></textarea>
+                            <div id="preview-slot-artbottom" class="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-center text-xs text-slate-500">Pratinjau Nonaktif</div>
+                        </div>
+                    </div>
+
+                    <!-- Slot 4: Sidebar Banner -->
+                    <div class="p-5 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-3 h-3 rounded-full bg-purple-400"></div>
+                                <h4 class="font-bold text-white text-sm">4. Sidebar Half Page Banner (300x600)</h4>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="slot-sidebar-active" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                <span class="ml-2 text-xs text-slate-300">Aktifkan</span>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <textarea id="slot-sidebar-code" rows="3" placeholder="Script Iklan Sidebar..." class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono"></textarea>
+                            <div id="preview-slot-sidebar" class="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-center text-xs text-slate-500">Pratinjau Nonaktif</div>
+                        </div>
+                    </div>
+
+                    <!-- Slot 5: Floating Sticky Footer Banner -->
+                    <div class="p-5 bg-slate-950/60 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-3 h-3 rounded-full bg-rose-400"></div>
+                                <h4 class="font-bold text-white text-sm">5. Sticky Floating Mobile Footer Banner</h4>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="slot-footer-active" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                                <span class="ml-2 text-xs text-slate-300">Aktifkan</span>
+                            </label>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <textarea id="slot-footer-code" rows="3" placeholder="Script Sticky Floating Banner..." class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 font-mono"></textarea>
+                            <div id="preview-slot-footer" class="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-center text-xs text-slate-500">Pratinjau Nonaktif</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- STUDIO TAB 4: SYNDICATION -->
+            <section id="studio-subview-syndication" class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-6 hidden">
+                <h2 class="text-xl font-bold text-white">Konfigurasi Cross-Post & Media Partner</h2>
+                <p class="text-xs text-slate-400">Hubungkan API untuk mempublikasikan berita secara otomatis ke jejaring media partner.</p>
+
+                <div class="space-y-4">
+                    <div class="p-5 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                        <h4 class="font-bold text-white text-sm"><i class="fa-brands fa-medium text-white mr-2"></i> Medium.com API Integration</h4>
+                        <input type="password" id="syn-medium-token" placeholder="Integration Token Medium..." class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white">
+                    </div>
+
+                    <div class="p-5 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                        <h4 class="font-bold text-white text-sm"><i class="fa-brands fa-dev text-purple-400 mr-2"></i> Dev.to API Key</h4>
+                        <input type="password" id="syn-devto-key" placeholder="Dev.to API Key..." class="w-full bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white">
+                    </div>
+
+                    <div class="p-5 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
+                        <h4 class="font-bold text-white text-sm"><i class="fa-brands fa-wordpress text-blue-400 mr-2"></i> External WordPress Endpoint</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <input type="text" id="syn-wp-url" placeholder="https://media-mitra.com/wp-json/wp/v2/posts" class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white">
+                            <input type="text" id="syn-wp-user" placeholder="Username Application" class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white">
+                        </div>
+                    </div>
+
+                    <button onclick="saveSyndicationSettings()" class="bg-purple-600 hover:bg-purple-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-lg shadow-purple-600/20 transition">
+                        Simpan Integrasi Syndication
+                    </button>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- MODAL 1: OFFICIAL ARTICLE READER MODAL (Situs Berita Resmi) -->
+    <!-- AUTHENTICATION MODAL -->
+    <div id="modal-auth" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-[70] flex justify-center items-center p-4 hidden">
+        <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl overflow-hidden">
+            <div class="p-6 border-b border-slate-800 bg-gradient-to-br from-sky-600/15 to-indigo-600/10">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white text-xl shadow-lg shadow-sky-500/20 mb-4"><i class="fa-solid fa-shield-halved"></i></div>
+                        <h3 id="auth-modal-title" class="text-xl font-black text-white">Masuk ke ArusTren</h3>
+                        <p id="auth-modal-subtitle" class="text-xs text-slate-400 mt-1">Gunakan akun Gmail dan sandi untuk mengelola artikelmu.</p>
+                    </div>
+                    <button onclick="closeAuthModal()" class="text-slate-500 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+                </div>
+            </div>
+            <form id="auth-form" onsubmit="submitAuth(event)" class="p-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-2">Gmail</label>
+                    <input id="auth-email" type="email" required autocomplete="email" placeholder="nama@gmail.com" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-sky-500">
+                    <p class="text-[10px] text-slate-500 mt-1">Untuk versi ini, akun harus menggunakan alamat @gmail.com.</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-2">Sandi</label>
+                    <div class="relative">
+                        <input id="auth-password" type="password" required minlength="8" autocomplete="current-password" placeholder="Minimal 8 karakter" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 pr-11 text-sm text-white focus:outline-none focus:border-sky-500">
+                        <button type="button" onclick="toggleAuthPassword()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"><i id="auth-password-eye" class="fa-solid fa-eye"></i></button>
+                    </div>
+                </div>
+                <div id="auth-confirm-wrap" class="hidden">
+                    <label class="block text-xs font-semibold text-slate-300 mb-2">Ulangi Sandi</label>
+                    <input id="auth-confirm" type="password" minlength="8" autocomplete="new-password" placeholder="Ulangi sandi" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-sky-500">
+                </div>
+                <button id="auth-submit-btn" type="submit" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-sky-600/20">Masuk</button>
+                <button id="auth-switch-btn" type="button" onclick="switchAuthMode()" class="w-full text-xs text-slate-400 hover:text-sky-300 transition">Belum punya akun? <strong class="text-sky-400">Daftar sekarang</strong></button>
+                <div class="text-[10px] leading-relaxed text-slate-500 bg-slate-950 border border-slate-800 rounded-xl p-3">
+                    <i class="fa-solid fa-circle-info text-sky-400 mr-1"></i> Login pada file HTML ini adalah penyimpanan akun lokal di browser. Untuk website publik dengan banyak pengguna, akun dan sandi harus dipindahkan ke backend/database agar benar-benar aman.
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-reader" class="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex justify-center items-center p-2 sm:p-4 hidden overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-4xl max-h-[92vh] rounded-3xl flex flex-col overflow-hidden shadow-2xl relative my-auto">
+            
+            <!-- Article Reading Progress Line -->
+            <div class="w-full bg-slate-800 h-1">
+                <div id="reading-progress" class="bg-sky-400 h-full w-0"></div>
+            </div>
+
+            <!-- Modal Fixed Top Header -->
+            <div class="px-6 py-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center sticky top-0 z-20">
+                <div class="flex items-center space-x-3">
+                    <span id="read-category" class="text-xs bg-sky-500/20 text-sky-300 px-3 py-1 rounded-full font-bold border border-sky-500/30">Kategori</span>
+                    <span id="read-live-readers" class="text-[11px] text-emerald-400 font-semibold hidden sm:inline flex items-center">
+                        <i class="fa-solid fa-fire text-amber-400 mr-1"></i> <span id="read-active-users-num">--</span> pembaca terdeteksi
+                    </span>
+                </div>
+                
+                <button onclick="closeReaderModal()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Scrollable Content Body -->
+            <div id="reader-scroll-area" onscroll="updateReadingProgress()" class="p-6 sm:p-10 overflow-y-auto space-y-6">
+                
+                <!-- Headline Title & Author Header -->
+                <div class="space-y-4">
+                    <h1 id="read-title" class="text-2xl sm:text-4xl font-extrabold text-white leading-tight">Judul Artikel Berita</h1>
+                    
+                    <div class="flex flex-wrap items-center justify-between gap-4 py-3 border-y border-slate-800 text-xs text-slate-400">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-9 h-9 rounded-full bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center text-white font-bold">
+                                <i class="fa-solid fa-user-ninja"></i>
+                            </div>
+                            <div>
+                                <p id="read-author" class="font-bold text-slate-200">Penulis Berita</p>
+                                <p class="text-[10px] text-slate-500"><span id="read-date">04/10/2026</span> • <span id="read-time">3 min baca</span></p>
+                            </div>
+                        </div>
+
+                        <!-- Realtime Views & Likes counter -->
+                        <div class="flex items-center space-x-3 font-semibold">
+                            <span class="bg-slate-800 px-3 py-1 rounded-full text-slate-300"><i class="fa-solid fa-eye text-sky-400 mr-1"></i> <span id="read-views-count">0</span> views</span>
+                            <button onclick="addArticleLike()" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 px-3 py-1 rounded-full border border-rose-500/30 transition flex items-center">
+                                <i class="fa-solid fa-heart mr-1.5 text-rose-400"></i> <span id="read-likes-count">0</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cover Photo -->
+                <div id="read-cover-box" class="w-full h-64 sm:h-96 rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 relative">
+                    <img id="read-cover-img" src="" class="w-full h-full object-cover">
+                    <p id="read-cover-caption" class="absolute bottom-2 left-2 bg-slate-900/80 backdrop-blur text-[10px] text-slate-300 px-2 py-1 rounded">Foto: ArusTren Documentations</p>
+                </div>
+
+                <!-- Injected Top Article Ad Slot -->
+                <div id="ad-render-arttop" class="w-full my-4 hidden"></div>
+
+                <!-- Editorial Key Takeaways / Rangkuman -->
+                <div class="p-4 bg-slate-950/80 rounded-2xl border-l-4 border-sky-500 text-xs space-y-1">
+                    <p class="font-bold text-sky-400 uppercase tracking-wider text-[10px]"><i class="fa-solid fa-bolt mr-1"></i> Rangkuman Berita (Key Points)</p>
+                    <p id="read-summary" class="text-slate-300">Poin penting dari berita ini disajikan secara lengkap dan akurat oleh redaksi ArusTren.</p>
+                </div>
+
+                <!-- Main Editorial Article Content Body -->
+                <div id="read-content-body" class="article-body prose prose-invert max-w-none text-slate-200 space-y-4">
+                    <!-- HTML Content -->
+                </div>
+
+                <!-- Injected Bottom Article Ad Slot -->
+                <div id="ad-render-artbottom" class="w-full my-6 hidden"></div>
+
+                <!-- Interactive Article Reactions Bar -->
+                <div class="p-5 bg-slate-950 rounded-2xl border border-slate-800 space-y-3 text-center">
+                    <p class="text-xs font-bold text-slate-300 uppercase tracking-wider">Bagaimana pendapat kamu tentang berita ini?</p>
+                    <div class="flex justify-center flex-wrap gap-3">
+                        <button onclick="triggerReaction('suka')" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs flex items-center space-x-2 transition">
+                            <span>👍 Suka</span>
+                            <span id="react-suka-num" class="font-bold text-sky-400">12</span>
+                        </button>
+                        <button onclick="triggerReaction('informatif')" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs flex items-center space-x-2 transition">
+                            <span>💡 Informatif</span>
+                            <span id="react-info-num" class="font-bold text-amber-400">28</span>
+                        </button>
+                        <button onclick="triggerReaction('kagum')" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700/80 rounded-xl text-xs flex items-center space-x-2 transition">
+                            <span>😮 Kagum</span>
+                            <span id="react-kagum-num" class="font-bold text-purple-400">9</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Share Bar & Crosspost Status -->
+                <div class="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-3 text-xs">
+                    <div class="flex items-center space-x-2 text-slate-400">
+                        <span>Bagikan Berita:</span>
+                        <button onclick="shareSocial('wa')" class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center"><i class="fa-brands fa-whatsapp"></i></button>
+                        <button onclick="shareSocial('tw')" class="w-8 h-8 rounded-full bg-sky-500 text-white flex items-center justify-center"><i class="fa-brands fa-x-twitter"></i></button>
+                        <button onclick="copyArticleLink()" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center" title="Salin Link"><i class="fa-solid fa-link"></i></button>
+                    </div>
+
+                    <div id="read-crosspost-badges" class="flex items-center space-x-1"></div>
+                </div>
+
+                <!-- REALTIME USER COMMENTS SECTION -->
+                <div class="space-y-4 pt-4 border-t border-slate-800">
+                    <h3 class="font-bold text-base text-white flex items-center justify-between">
+                        <span><i class="fa-solid fa-comments text-sky-400 mr-2"></i> Kolom Diskusi & Komentar</span>
+                        <span id="comments-count-badge" class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full">0 Komentar</span>
+                    </h3>
+
+                    <!-- Add Comment Form -->
+                    <form onsubmit="submitUserComment(event)" class="space-y-3 bg-slate-950/80 p-4 rounded-2xl border border-slate-800">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <input type="text" id="comment-author" required placeholder="Nama lengkap kamu..." class="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
+                            <input type="text" id="comment-city" placeholder="Kota / Wilayah (Opsional)..." class="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500">
+                        </div>
+                        <textarea id="comment-text" required rows="2" placeholder="Tuliskan pendapat atau pandangan kamu terkait berita ini..." class="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-sky-500"></textarea>
+                        <div class="flex justify-end">
+                            <button type="submit" class="bg-sky-600 hover:bg-sky-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition flex items-center shadow-md shadow-sky-600/20">
+                                <i class="fa-solid fa-paper-plane mr-1.5"></i> Kirim Komentar
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Injected User Comments List -->
+                    <div id="comments-list-box" class="space-y-3">
+                        <!-- Injected JS -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: MULTI-AI ARTICLE ASSISTANT -->
+    <div id="modal-ai" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex justify-center items-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 w-full max-w-2xl rounded-3xl p-6 space-y-5 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-white text-base flex items-center">
+                    <i class="fa-solid fa-wand-magic-sparkles text-purple-400 mr-2"></i> Multi-AI Writer ArusTren
+                </h3>
+                <button onclick="closeAIModal()" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-2">Provider AI</label>
+                    <select id="ai-provider" onchange="updateAIProviderUI()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openai">OpenAI / GPT</option>
+                        <option value="xai">xAI / Grok</option>
+                        <option value="anthropic">Anthropic / Claude</option>
+                        <option value="xkiro">xKiro — Multi-AI Gateway</option>
+                        <option value="custom">Custom OpenAI-compatible API</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-2">Model</label>
+                    <div class="flex gap-2"><input type="text" id="ai-model" placeholder="Contoh: gemini-3.8-flash" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500"><button type="button" id="btn-xkiro-models" onclick="loadXKiroModels()" class="hidden px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-[10px] font-bold text-cyan-300">Muat Model</button></div>
+                </div>
+            </div>
+
+            <div id="ai-custom-url-box" class="hidden">
+                <label class="block text-xs font-semibold text-slate-300 mb-2">Custom API Base URL</label>
+                <input type="url" id="ai-custom-url" placeholder="https://contoh-provider.com/v1" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+            </div>
+
+            <div>
+                <label id="ai-prompt-label" class="block text-xs font-semibold text-slate-300 mb-2">Topik Utama Berita</label>
+                <textarea id="ai-prompt-input" rows="4" placeholder="Misal: Perkembangan AI di Indonesia tahun 2026..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-purple-500"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-2">API Key</label>
+                <input type="password" id="ai-api-key" placeholder="Masukkan API key provider yang dipilih" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-purple-500">
+                <p class="text-[10px] text-amber-300/80 mt-1">Kunci disimpan hanya di browser ini. Untuk situs publik, jangan mengekspos API key di JavaScript client-side; gunakan backend/proxy.</p>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-3 text-[10px]">
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-400"><b class="text-white">Gemini</b><br>Google AI API</div>
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-400"><b class="text-white">GPT</b><br>OpenAI API</div>
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-400"><b class="text-white">Grok</b><br>xAI API</div>
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-400"><b class="text-white">Claude</b><br>Anthropic API</div>
+                <div class="bg-slate-950 border border-cyan-500/20 rounded-xl p-3 text-slate-400"><b class="text-cyan-300">xKiro</b><br>40+ model gateway</div>
+            </div>
+
+            <div id="ai-loading" class="hidden text-center py-4 space-y-2">
+                <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-purple-500 border-t-transparent"></div>
+                <p id="ai-loading-text" class="text-xs text-purple-300 animate-pulse">AI sedang menyusun berita lengkap...</p>
+            </div>
+
+            <div class="flex justify-end space-x-3 pt-2">
+                <button onclick="closeAIModal()" class="px-4 py-2 bg-slate-800 text-slate-300 rounded-xl text-xs">Batal</button>
+                <button id="btn-generate-ai" onclick="runAIGenerator()" class="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold rounded-xl text-xs shadow-lg shadow-purple-600/20">Generate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- STICKY FLOATING AD BANNER (SLOT FOOTER) -->
+    <div id="ad-render-footer" class="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800 text-center hidden p-2">
+        <!-- Injected Sticky Banner -->
+    </div>
+
+    <!-- FOOTER SITUS RESMI -->
+    <footer class="bg-slate-950 border-t border-slate-800 py-10 mt-12 text-slate-400 text-xs">
+        <div class="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div class="space-y-3">
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-xl bg-sky-500 flex items-center justify-center text-white font-black text-lg">A</div>
+                    <span class="font-extrabold text-base text-white font-mono">ArusTren.id</span>
+                </div>
+                <p class="text-slate-500 leading-relaxed text-[11px]">Portal Berita Terkini & Platform Publisher Independen berbasis teknologi AI dan Dynamic Monetization Engine.</p>
+            </div>
+
+            <div>
+                <h4 class="font-bold text-white mb-3 text-xs uppercase tracking-wider">Kategori Populer</h4>
+                <ul class="space-y-2 text-[11px]">
+                    <li><a href="#" onclick="filterCategory('Teknologi & AI')" class="hover:text-sky-400 transition">Teknologi & AI</a></li>
+                    <li><a href="#" onclick="filterCategory('Bisnis & Keuangan')" class="hover:text-sky-400 transition">Bisnis & Keuangan</a></li>
+                    <li><a href="#" onclick="filterCategory('Gaya Hidup')" class="hover:text-sky-400 transition">Gaya Hidup & Travel</a></li>
+                    <li><a href="#" onclick="filterCategory('Viral & Hot')" class="hover:text-rose-400 transition">Viral & Hot Trending</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="font-bold text-white mb-3 text-xs uppercase tracking-wider">Layanan & Jaringan</h4>
+                <ul class="space-y-2 text-[11px]">
+                    <li><a href="#" onclick="switchViewMode('studio')" class="hover:text-sky-400 transition">Studio Publisher</a></li>
+                    <li><a href="#" onclick="switchViewMode('studio')" class="hover:text-sky-400 transition">Monetisasi Google AdSense</a></li>
+                    <li><a href="#" class="hover:text-sky-400 transition">Redaksi & Kode Etik Jurnalistik</a></li>
+                    <li><a href="#" class="hover:text-sky-400 transition">Pedoman Media Cyber</a></li>
+                </ul>
+            </div>
+
+            <div>
+                <h4 class="font-bold text-white mb-3 text-xs uppercase tracking-wider">ArusTren Mobile & API</h4>
+                <p class="text-[11px] text-slate-500 mb-3">Nikmati kemudahan membaca berita terkini langsung dari gadget milikmu.</p>
+                <div class="flex space-x-3 text-base text-slate-300">
+                    <a href="#" class="hover:text-sky-400"><i class="fa-brands fa-facebook"></i></a>
+                    <a href="#" class="hover:text-sky-400"><i class="fa-brands fa-x-twitter"></i></a>
+                    <a href="#" class="hover:text-sky-400"><i class="fa-brands fa-instagram"></i></a>
+                    <a href="#" class="hover:text-sky-400"><i class="fa-brands fa-youtube"></i></a>
+                </div>
+            </div>
+        </div>
+
+        <div class="max-w-7xl mx-auto px-4 mt-8 pt-6 border-t border-slate-900 flex flex-col sm:flex-row justify-between items-center text-[11px] text-slate-600 gap-2">
+            <p>© 2026 ArusTren.id Media Digital. Seluruh hak cipta dilindungi undang-undang.</p>
+            <p>Powered by Dynamic Ad Manager & Gemini AI Agent</p>
+        </div>
+    </footer>
+
+    <!-- APPLICATION JAVASCRIPT LOGIC -->
+    <script>
+        // GLOBAL APP STATE & INITIALIZATION
+        let quillEditor = null;
+        let aiMode = 'article';
+        let currentViewMode = 'portal'; // 'portal' or 'studio'
+        let authMode = 'login';
+        let currentUser = null;
+        const AUTH_USERS_KEY = 'arustren_auth_users';
+        const AUTH_SESSION_KEY = 'arustren_auth_session';
+        const AUTH_VERSION = 2; // Local browser auth; global accounts require a server database.
+
+        function getAuthUsers() {
+            try { const users = JSON.parse(localStorage.getItem(AUTH_USERS_KEY) || '[]'); return Array.isArray(users) ? users : []; } catch { return []; }
+        }
+
+        function getRegisteredAccountCount() { return getAuthUsers().length; }
+        function getAccountDataStatus() { return 'Lokal: hanya akun yang terdaftar pada browser/perangkat ini'; }
