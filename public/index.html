@@ -13,7 +13,7 @@
     <title>ArusTren - Portal Berita Resmi & Dynamic Publisher Studio</title>
 
     <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com" defer></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -45,25 +45,20 @@
     </script>
 
     <!-- FontAwesome Icons -->
-    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Google Fonts Inter & Merriweather for Editorial Reading -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300&display=swap" rel="stylesheet">
 
     <!-- Quill.js Rich Text Editor -->
     <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
-    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js" defer></script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
 
     <!-- Supabase client + ArusTren configuration -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="./config.js"></script>
 
     <style>
-        img { content-visibility: auto; }
-        .article-body img { max-width: 100%; height: auto; }
         body { font-family: 'Inter', sans-serif; }
         .article-body { font-family: 'Merriweather', serif; font-size: 1.05rem; line-height: 1.85; }
         .ql-editor { min-height: 250px; font-size: 16px; line-height: 1.7; }
@@ -1226,7 +1221,36 @@
         if (!state.ai.model) state.ai.model = 'gemini-3.8-flash';
         if (!state.ai.customUrl) state.ai.customUrl = '';
         localStorage.setItem('arustren_ai', JSON.stringify(state.ai));
-        // ON PAGE LOAD INITIALIZATION is handled by the single Supabase startup path at the end.
+
+        // ON PAGE LOAD INITIALIZATION
+        window.addEventListener('DOMContentLoaded', () => {
+            // Initialize Quill Editor
+            quillEditor = new Quill('#editor-container', {
+                theme: 'snow',
+                placeholder: 'Tuliskan isi narasi berita terlengkap di sini...'
+            });
+            document.getElementById('input-title')?.addEventListener('input', updateSEOCheck);
+            document.getElementById('input-tags')?.addEventListener('input', updateSEOCheck);
+            quillEditor.on('text-change', updateSEOCheck);
+
+            initializeGoogleAdSense();
+            currentUser = getCurrentUser();
+            updateAuthUI();
+
+            // Set Current Date Display
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
+            document.getElementById('current-date-display').innerText = dateStr;
+
+            // Load Ads Fields & Setup UI
+            populateAdSettingsFields();
+            applyAdsToLayout();
+            renderPortalView();
+            renderStudioDashboard();
+
+            // Refresh factual metrics; no random/simulated traffic.
+            refreshFactualMetrics();
+        });
 
         // TOAST NOTIFICATION SYSTEM
         function showToast(message, type = 'success') {
@@ -1326,10 +1350,8 @@
             renderPortalNewsGrid();
         }
 
-        let searchRenderTimer = null;
         function handleSearch() {
-            clearTimeout(searchRenderTimer);
-            searchRenderTimer = setTimeout(() => renderPortalNewsGrid(), 120);
+            renderPortalNewsGrid();
         }
 
         function renderHeroFeatured() {
@@ -1368,7 +1390,7 @@
                 <div class="space-y-4 flex flex-col justify-between">
                     ${secondary.map(art => `
                         <div onclick="openReaderModal(${art.id})" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex gap-4 hover:border-sky-500/50 cursor-pointer transition group flex-1">
-                            <img src="${art.cover}" loading="lazy" decoding="async" class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover flex-shrink-0 group-hover:scale-105 transition">
+                            <img src="${art.cover}" class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover flex-shrink-0 group-hover:scale-105 transition">
                             <div class="flex flex-col justify-between">
                                 <div>
                                     <span class="text-[10px] text-sky-400 font-bold uppercase">${art.category}</span>
@@ -1416,7 +1438,7 @@
                 <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden hover:border-sky-500/50 transition flex flex-col justify-between group shadow-lg">
                     <div>
                         <div class="relative h-44 overflow-hidden bg-slate-950 cursor-pointer" onclick="openReaderModal(${art.id})">
-                            <img src="${art.cover}" alt="${art.title}" loading="lazy" decoding="async" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                            <img src="${art.cover}" alt="${art.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
                             <span class="absolute top-3 left-3 bg-slate-950/80 backdrop-blur text-sky-300 text-[10px] font-bold px-2.5 py-1 rounded-full border border-sky-500/30">
                                 ${art.category}
                             </span>
@@ -2055,15 +2077,10 @@
             }
 
             if (provider === 'xkiro') {
-                // xKiro dipanggil lewat Netlify Function agar browser tidak terkena masalah CORS
-                // dan API key tidak perlu dikirim langsung ke domain xKiro dari client.
-                const res = await fetch('/.netlify/functions/xkiro-chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ apiKey, model, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }], temperature: 0.75, max_tokens: 6000 })
-                });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data?.error?.message || data?.error || `xKiro HTTP ${res.status}`);
+                const url = 'https://api.xkiro.com/v1/chat/completions';
+                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }], temperature: 0.75, max_tokens: 6000 }) });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data?.error?.message || `xKiro HTTP ${res.status}`);
                 return data?.choices?.[0]?.message?.content || '';
             }
 
@@ -2082,11 +2099,9 @@
             const btn = document.getElementById('btn-xkiro-models');
             btn.disabled = true; btn.innerText = 'Memuat...';
             try {
-                // Katalog model xKiro diambil melalui Netlify Function untuk menghindari CORS browser.
-                // Endpoint /v1/models xKiro bersifat publik dan tidak membutuhkan API key.
-                const res = await fetch('/.netlify/functions/xkiro-models', { cache: 'no-store' });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) throw new Error(data?.error?.message || data?.error || `xKiro HTTP ${res.status}`);
+                const res = await fetch('https://api.xkiro.com/v1/models');
+                const data = await res.json();
+                if (!res.ok) throw new Error(data?.error?.message || `xKiro HTTP ${res.status}`);
                 const models = Array.isArray(data?.data) ? data.data.filter(m => m?.modality === 'chat' || !m?.modality) : [];
                 if (models.length) {
                     const model = models.find(m => m.id === document.getElementById('ai-model').value) || models[0];
@@ -2333,7 +2348,10 @@ function startServerRealtime(){
     const heartbeat=async()=>{try{const d=await api('/analytics/presence',{method:'POST',body:JSON.stringify({visitorId:getVisitorId(),page:currentViewMode})});window.__serverStats=window.__serverStats||{};window.__serverStats.online=d.online;const n=document.getElementById('live-readers-count');if(n)n.innerText=d.online??0}catch{}};
     heartbeat();clearInterval(serverOnlineTimer);serverOnlineTimer=setInterval(heartbeat,20000);
 }
-
+window.addEventListener('DOMContentLoaded',async()=>{
+    try{await loadServerMe(); await loadServerArticles();}catch(err){console.warn('Backend belum tersedia:',err.message)}
+    startServerRealtime(); await refreshFactualMetrics();
+});
 </script>
 
 
@@ -2353,9 +2371,7 @@ function startServerRealtime(){
   const sid=()=>{let x=sessionStorage.getItem(S);if(!x){x='ses_'+crypto.randomUUID();sessionStorage.setItem(S,x)}return x};
   const map=a=>{const rs=a.reactions||[],cs=a.comments||[],r={suka:0,informatif:0,kagum:0};rs.forEach(x=>{if(r[x.type]!==undefined)r[x.type]++});return {...a,ownerId:a.owner_id,cover:a.image_url||'',author:a.author||'Redaksi ArusTren',readTime:a.read_time||'1 mnt',summary:a.summary||a.excerpt||'',tags:Array.isArray(a.tags)?a.tags.join(', '):(a.tags||''),adsenseSlot:a.adsense_slot||'',likes:r.suka,views:+a.views||0,reactions:r,comments:cs.map(x=>({id:x.id,name:x.author_name||'Pengunjung',city:'Indonesia',text:x.content,time:x.created_at?new Date(x.created_at).toLocaleString('id-ID'):'Baru saja'})),date:a.created_at?new Date(a.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):''}};
   async function me(){const {data:{user}}=await sb.auth.getUser();currentUser=user?{id:user.id,email:user.email}:null;updateAuthUI();return currentUser}
-  let articleRefreshTimer=null;
-  async function articles(){const {data,error}=await sb.from('articles').select('*,comments(*),reactions(*)').order('created_at',{ascending:false});if(error)throw error;state.articles=(data||[]).map(map);renderPortalView();if(currentViewMode==='studio')renderStudioDashboard();return state.articles}
-  function scheduleArticleRefresh(){clearTimeout(articleRefreshTimer);articleRefreshTimer=setTimeout(()=>articles().catch(()=>{}),300)}
+  async function articles(){const {data,error}=await sb.from('articles').select('*,comments(*),reactions(*)').order('created_at',{ascending:false});if(error)throw error;state.articles=(data||[]).map(map);renderPortalView();renderStudioDashboard();await dash();return state.articles}
   async function one(id){if(!isUuid(id))throw Error('ID artikel tidak valid. Silakan muat ulang halaman.');const {data,error}=await sb.from('articles').select('*,comments(*),reactions(*)').eq('id',id).maybeSingle();if(error)throw error;if(!data)throw Error('Artikel tidak ditemukan.');return map(data)}
   async function auth(e){e.preventDefault();const email=normalizeGmail(document.getElementById('auth-email').value),password=document.getElementById('auth-password').value,confirm=document.getElementById('auth-confirm').value;if(!isValidGmail(email))return showToast('Gunakan alamat Gmail yang valid (@gmail.com).','error');if(password.length<8)return showToast('Sandi minimal 8 karakter.','error');if(authMode==='register'&&password!==confirm)return showToast('Konfirmasi sandi tidak sama.','error');try{let x=authMode==='register'?await sb.auth.signUp({email,password}):await sb.auth.signInWithPassword({email,password});if(x.error)throw x.error;if(x.data.session){currentUser={id:x.data.user.id,email:x.data.user.email};if(authMode==='login')await sb.rpc('touch_last_login');closeAuthModal();updateAuthUI();showToast(authMode==='register'?'Akun berhasil dibuat dan langsung login.':'Login berhasil.')}else{closeAuthModal();showToast('Akun berhasil dibuat. Silakan login jika sesi belum terbentuk.','info')}await articles();await metrics()}catch(x){showToast(x.message||'Autentikasi gagal.','error')}}
   async function logout(){await sb.auth.signOut();currentUser=null;updateAuthUI();switchViewMode('portal');showToast('Kamu sudah logout.')}
@@ -2367,13 +2383,10 @@ function startServerRealtime(){
   async function comment(e){e.preventDefault();if(!currentActiveArticleId||!requireLogin('mengirim komentar'))return;const {data:{user}}=await sb.auth.getUser(),text=document.getElementById('comment-text').value.trim(),name=document.getElementById('comment-author').value.trim()||user.email.split('@')[0];if(!text)return;const x=await sb.from('comments').insert({article_id:currentActiveArticleId,user_id:user.id,author_name:name,content:text});if(x.error)return showToast(x.error.message,'error');const a=await one(currentActiveArticleId);const i=state.articles.findIndex(x=>x.id===a.id);if(i>=0)state.articles[i]=a;renderArticleComments(a);document.getElementById('comment-text').value='';showToast('Komentar dipublikasikan!')}
   async function dash(){if(!currentUser){['stat-total-articles','stat-total-views'].forEach(id=>{const e=document.getElementById(id);if(e)e.innerText='0'});return}const {data}=await sb.from('articles').select('views,adsense_slot').eq('owner_id',currentUser.id),rows=data||[],v=rows.reduce((s,x)=>s+(+x.views||0),0),slots=rows.filter(x=>x.adsense_slot).length;const set=(id,val)=>{const e=document.getElementById(id);if(e)e.innerText=val};set('stat-total-articles',rows.length);set('stat-total-views',v.toLocaleString('id-ID'));set('stat-est-revenue','Belum tersedia');set('stat-active-ads',slots);set('ads-active-badge',slots+' Artikel');set('widget-total-views',v.toLocaleString('id-ID'));set('widget-active-ads-count',slots);set('widget-est-earning','Belum tersedia')}
   async function metrics(){const x=await sb.from('profiles').select('id',{count:'exact',head:true});window.__supabaseUsers=x.count||0;const e=document.getElementById('stat-total-users');if(e)e.innerText=String(window.__supabaseUsers);const s=document.getElementById('account-data-status');if(s)s.innerText='Supabase — data global';await dash()}
-  async function realtime(){const refresh=()=>scheduleArticleRefresh();['articles','comments','reactions'].forEach(t=>sb.channel('arustren-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},refresh).subscribe());const c=sb.channel('arustren-online',{config:{presence:{key:vid()}}});c.on('presence',{event:'sync'},()=>{window.__supabaseOnline=Object.keys(c.presenceState()).length;const a=document.getElementById('live-readers-count'),b=document.getElementById('read-active-users-num');if(a)a.innerText=window.__supabaseOnline;if(b)b.innerText=window.__supabaseOnline}).subscribe(async st=>{if(st==='SUBSCRIBED')await c.track({page:currentViewMode,at:new Date().toISOString()})})}
+  async function realtime(){const refresh=()=>{articles().catch(()=>{});metrics().catch(()=>{})};['articles','comments','reactions'].forEach(t=>sb.channel('arustren-'+t).on('postgres_changes',{event:'*',schema:'public',table:t},refresh).subscribe());const c=sb.channel('arustren-online',{config:{presence:{key:vid()}}});c.on('presence',{event:'sync'},()=>{window.__supabaseOnline=Object.keys(c.presenceState()).length;const a=document.getElementById('live-readers-count'),b=document.getElementById('read-active-users-num');if(a)a.innerText=window.__supabaseOnline;if(b)b.innerText=window.__supabaseOnline}).subscribe(async st=>{if(st==='SUBSCRIBED')await c.track({page:currentViewMode,at:new Date().toISOString()})})}
   Object.assign(window,{loadServerMe:me,submitAuth:auth,logoutUser:logout,loadServerArticles:articles,openReaderModal:reader,saveArticle:save,editArticle:edit,deleteArticle:del,addArticleLike:()=>react('suka'),triggerReaction:react,submitUserComment:comment,updateDashboardStats:dash,updateSidebarWidgetStats:dash,refreshFactualMetrics:metrics,startServerRealtime:realtime});
   sb.auth.onAuthStateChange((_e,s)=>{currentUser=s?.user?{id:s.user.id,email:s.user.email}:null;updateAuthUI()});
-  document.addEventListener('DOMContentLoaded',async()=>{
-    try{initializeArusTrenUI();await me();await articles();await metrics();await realtime()}
-    catch(x){console.warn('Supabase:',x.message)}
-});
+  document.addEventListener('DOMContentLoaded',async()=>{try{await me();await articles();await metrics();await realtime()}catch(x){console.warn('Supabase:',x.message)}});
 })();
 </script>
 </body>
