@@ -997,3 +997,1358 @@
 
         function getRegisteredAccountCount() { return getAuthUsers().length; }
         function getAccountDataStatus() { return 'Lokal: hanya akun yang terdaftar pada browser/perangkat ini'; }
+
+        function getCurrentUser() {
+            try {
+                const id = localStorage.getItem(AUTH_SESSION_KEY);
+                if (!id) return null;
+                return getAuthUsers().find(u => u.id === id) || null;
+            } catch { return null; }
+        }
+
+        async function hashPassword(password) {
+            const data = new TextEncoder().encode(password);
+            const digest = await crypto.subtle.digest('SHA-256', data);
+            return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function normalizeGmail(email) { return email.trim().toLowerCase(); }
+        function isValidGmail(email) { return /^[a-z0-9._%+-]+@gmail\.com$/i.test(email); }
+        function getActiveOwnerId() { return currentUser?.id || LOCAL_PUBLISHER_ID; }
+        function isLoggedIn() { return !!currentUser; }
+
+        function openAuthModal(mode='login') {
+            authMode = mode;
+            const modal = document.getElementById('modal-auth');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            updateAuthModalUI();
+            setTimeout(() => document.getElementById('auth-email')?.focus(), 50);
+        }
+
+        function closeAuthModal() { document.getElementById('modal-auth')?.classList.add('hidden'); }
+
+        function switchAuthMode() { authMode = authMode === 'login' ? 'register' : 'login'; updateAuthModalUI(); }
+
+        function updateAuthModalUI() {
+            const register = authMode === 'register';
+            document.getElementById('auth-modal-title').innerText = register ? 'Buat Akun ArusTren' : 'Masuk ke ArusTren';
+            document.getElementById('auth-modal-subtitle').innerText = register ? 'Daftar dengan Gmail dan buat sandi untuk memiliki ruang artikel sendiri.' : 'Gunakan Gmail dan sandi untuk mengelola artikelmu.';
+            document.getElementById('auth-submit-btn').innerText = register ? 'Buat Akun & Masuk' : 'Masuk';
+            document.getElementById('auth-confirm-wrap').classList.toggle('hidden', !register);
+            document.getElementById('auth-confirm').required = register;
+            document.getElementById('auth-switch-btn').innerHTML = register ? 'Sudah punya akun? <strong class="text-sky-400">Masuk di sini</strong>' : 'Belum punya akun? <strong class="text-sky-400">Daftar sekarang</strong>';
+        }
+
+        function toggleAuthPassword() {
+            const input = document.getElementById('auth-password');
+            const eye = document.getElementById('auth-password-eye');
+            input.type = input.type === 'password' ? 'text' : 'password';
+            eye.className = input.type === 'password' ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+        }
+
+        async function submitAuth(e) {
+            e.preventDefault();
+            const email = normalizeGmail(document.getElementById('auth-email').value);
+            const password = document.getElementById('auth-password').value;
+            const confirm = document.getElementById('auth-confirm').value;
+            if (!isValidGmail(email)) return showToast('Gunakan alamat Gmail yang valid (@gmail.com).', 'error');
+            if (password.length < 8) return showToast('Sandi minimal 8 karakter.', 'error');
+            const users = getAuthUsers();
+            if (authMode === 'register') {
+                if (password !== confirm) return showToast('Konfirmasi sandi tidak sama.', 'error');
+                if (users.some(u => u.email === email)) return showToast('Gmail tersebut sudah terdaftar. Silakan login.', 'error');
+                const user = { id: 'usr_' + crypto.randomUUID(), email, passwordHash: await hashPassword(password), createdAt: new Date().toISOString() };
+                users.push(user);
+                localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users));
+                localStorage.setItem(AUTH_SESSION_KEY, user.id);
+                currentUser = user;
+                migrateLegacyOwnedArticles();
+                closeAuthModal();
+                updateAuthUI();
+                showToast('Akun berhasil dibuat. Selamat datang!');
+            } else {
+                const user = users.find(u => u.email === email);
+                if (!user || user.passwordHash !== await hashPassword(password)) return showToast('Gmail atau sandi salah.', 'error');
+                localStorage.setItem(AUTH_SESSION_KEY, user.id);
+                currentUser = user;
+                migrateLegacyOwnedArticles();
+                closeAuthModal();
+                updateAuthUI();
+                showToast('Login berhasil.');
+            }
+        }
+
+        function migrateLegacyOwnedArticles() {
+            if (!currentUser) return;
+            let changed = false;
+            state.articles.forEach(a => {
+                if (!a.ownerId || a.ownerId === LOCAL_PUBLISHER_ID) { a.ownerId = currentUser.id; changed = true; }
+            });
+            if (changed) localStorage.setItem('arustren_articles', JSON.stringify(state.articles));
+        }
+
+        function updateAuthUI() {
+            const logged = !!currentUser;
+            document.getElementById('btn-auth-login')?.classList.toggle('hidden', logged);
+            document.getElementById('btn-auth-register')?.classList.toggle('hidden', logged);
+            const chip = document.getElementById('auth-user-chip');
+            chip?.classList.toggle('hidden', !logged);
+            chip?.classList.toggle('flex', logged);
+            if (logged) document.getElementById('auth-user-email').innerText = currentUser.email;
+        }
+
+        function logoutUser() {
+            localStorage.removeItem(AUTH_SESSION_KEY);
+            currentUser = null;
+            updateAuthUI();
+            switchViewMode('portal');
+            showToast('Kamu sudah logout.');
+        }
+
+        function requireLogin(action='melanjutkan') {
+            if (currentUser) return true;
+            showToast('Silakan login terlebih dahulu untuk ' + action + '.', 'error');
+            openAuthModal('login');
+            return false;
+        }
+
+        let currentActiveArticleId = null;
+        let selectedCategoryFilter = 'ALL';
+
+        // INITIAL SAMPLE ARTICLES FOR OFFICIAL PORTAL
+        const sampleArticles = [
+            {
+                id: 101,
+                title: "Revolusi AI 2026: Cara Kecerdasan Buatan Mengubah Karir Anak Muda di Indonesia",
+                category: "Teknologi & AI",
+                author: "Rian ArusTren",
+                tags: "ai, teknologi, karir, 2026, indonesia",
+                cover: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=1200&q=80",
+                excerpt: "Perkembangan Artificial Intelligence melaju sangat pesat di tahun 2026. Simak skill utama yang kini paling dicari oleh perusahaan raksasa.",
+                summary: "Kemampuan prompt engineering, critical thinking, dan kolaborasi manusia-AI menjadi kunci sukses menghadapi pasar kerja tahun 2026.",
+                content: `<p class="drop-cap font-semibold text-slate-100">Perkembangan kecerdasan buatan (Artificial Intelligence) di tahun 2026 telah mencapai titik balik penting dalam sejarah industri digital. Tidak hanya sekadar membantu otomatisasi tugas sederhana, AI kini menjadi rekan kerja utama di berbagai lini pekerjaan kreatif, analisis data, hingga pengambilan keputusan bisnis.</p><h2>Transformasi Lanskap Pekerjaan Modern</h2><p>Berdasarkan riset terbaru, lebih dari 70% perusahaan nasional di Indonesia telah mengadopsi sistem kecerdasan buatan dalam alur kerja harian mereka. Hal ini menciptakan pergeseran kebutuhan tenaga kerja muda yang tidak hanya menguasai teori, namun juga adaptif dengan alat digital modern.</p><blockquote>"Bukan AI yang akan menggantikan manusia, melainkan manusia yang memanfaatkan AI yang akan menggantikan mereka yang enggan beradaptasi."</blockquote><p>Beberapa keahlian utama yang saat ini menjadi perhatian utama HRD perusahaan global antara lain:</p><ul><li><strong>Prompt Architecture & AI Workflows:</strong> Merancang instruksi presisi untuk efisiensi tinggi.</li><li><strong>Verifikasi Fakta & Etika Digital:</strong> Memastikan output AI akurat, objektif, dan bebas bias.</li><li><strong>Strategic Problem Solving:</strong> Menghubungkan wawasan AI dengan kebutuhan nyata masyarakat.</li></ul><p>Dengan terus belajar dan mengasah kemampuan adaptif, generasi muda Indonesia akan siap memimpin arus teknologi di tingkat internasional.</p>`,
+                date: "04/10/2026",
+                readTime: "3 mnt",
+                views: 0,
+                likes: 0,
+                reactions: { suka: 42, informatif: 35, kagum: 12 },
+                comments: [],
+                cross: { medium: true, devto: true, wp: false }
+            },
+            {
+                id: 102,
+                title: "5 Destinasi Wisata Tersembunyi di Indonesia yang Viral dan Paling Hits Tahun Ini",
+                category: "Gaya Hidup",
+                author: "Siti Rahma",
+                tags: "travel, wisata, indonesia, viral, liburan",
+                cover: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80",
+                excerpt: "Ingin liburan tenang dengan pemandangan menakjubkan? Ini dia 5 tempat wisata tersembunyi yang instagramable.",
+                summary: "Destinasi alam tersembunyi kini menjadi favorit wisatawan lokal karena suasana asri dan keaslian pemandangannya.",
+                content: `<p>Tren perjalanan di tahun 2026 bergeser ke arah <em>eco-tourism</em> dan keheningan alam. Banyak wisatawan mulai meninggalkan tempat-tempat yang terlalu ramai dan beralih mencari surga tersembunyi di pelosok nusantara.</p><h2>Keindahan Alam yang Belum Terjamah</h2><p>Mulai dari lembah hijau berudara segar di Nusa Tenggara hingga pantai tersembunyi di Maluku, lokasi-lokasi ini menawarkan lanskap eksotis yang memanjakan mata sekaligus menjadi latar foto menakjubkan untuk media sosialmu.</p><p>Pastikan kamu selalu menjaga kebersihan dan kelestarian alam saat berkunjung ke destinasi lokal tersebut!</p>`,
+                date: "03/10/2026",
+                readTime: "2 mnt",
+                views: 0,
+                likes: 0,
+                reactions: { suka: 30, informatif: 20, kagum: 14 },
+                comments: [],
+                cross: { medium: false, devto: false, wp: true }
+            },
+            {
+                id: 103,
+                title: "Strategi Bisnis UMKM Go Digital 2026: Tingkatkan Penjualan Hingga 300%",
+                category: "Bisnis & Keuangan",
+                author: "Tim Ekonomi ArusTren",
+                tags: "bisnis, umkm, ekonomi, digital, keuangan",
+                cover: "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
+                excerpt: "Langkah taktis bagi pemilik UMKM untuk memanfaatkan ekosistem digital dan ad engine guna melipatgandakan omzet.",
+                summary: "Digitalisasi saluran pemasaran dan iklan terarah menjadi kunci pertumbuhan pesat pelaku usaha mikro.",
+                content: `<p>Pelaku UMKM di Indonesia kini memiliki peluang lebih besar untuk menjangkau pasar nasional bahkan global melalui otomatisasi platform digital dan pemasaran dinamis.</p><h2>Optimalisasi Saluran Penjualan</h2><p>Dengan mengintegrasikan platform konten berita dan iklan yang ditargetkan dengan presisi, tingkat konversi pelanggan dapat meningkat secara signifikan.</p>`,
+                date: "02/10/2026",
+                readTime: "4 mnt",
+                views: 0,
+                likes: 0,
+                reactions: { suka: 50, informatif: 48, kagum: 14 },
+                comments: [],
+                cross: { medium: true, devto: false, wp: true }
+            }
+        ];
+
+        // STATE MANAGEMENT
+        let state = {
+            articles: JSON.parse(localStorage.getItem('arustren_articles')) || sampleArticles,
+            ads: JSON.parse(localStorage.getItem('arustren_ads')) || {
+                pubId: "ca-pub-5462727366652523",
+                autoScript: "",
+                slots: {
+                    header: { active: true, code: '<div class="p-3 bg-gradient-to-r from-sky-950 via-slate-900 to-sky-950 border border-sky-500/30 rounded-2xl text-center text-xs text-sky-300 flex items-center justify-between px-6 shadow-lg"><div class="flex items-center space-x-2"><i class="fa-solid fa-rectangle-ad text-sky-400 text-base"></i><span class="font-bold">GOOGLE ADSENSE BANNER LEADERBOARD (728x90)</span></div><span class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Iklan Otomatis</span></div>' },
+                    artTop: { active: true, code: '<div class="p-3.5 bg-slate-950 border border-emerald-500/30 rounded-2xl text-center text-xs text-emerald-300 shadow-md"><i class="fa-solid fa-bullhorn text-emerald-400 mr-2"></i><strong>IN-ARTICLE NATIVE SPONSORED BANNER (300x250)</strong></div>' },
+                    artBottom: { active: true, code: '<div class="p-3.5 bg-slate-950 border border-amber-500/30 rounded-2xl text-center text-xs text-amber-300 shadow-md"><i class="fa-solid fa-ad text-amber-400 mr-2"></i><strong>BOTTOM ARTICLE RECOMMENDATION ADS SLOT</strong></div>' },
+                    sidebar: { active: true, code: '<div class="p-6 bg-slate-900 border border-purple-500/30 rounded-2xl text-center text-xs text-purple-300 space-y-2"><i class="fa-solid fa-rectangle-ad text-2xl text-purple-400"></i><p class="font-bold">SIDEBAR BANNER SPONSOR (300x600)</p><p class="text-[10px] text-slate-400">Ruang Iklan Terverifikasi Google AdSense</p></div>' },
+                    footer: { active: true, code: '<div class="flex justify-between items-center text-xs text-slate-300 max-w-7xl mx-auto px-4 py-1"><span><i class="fa-solid fa-rectangle-ad text-rose-400 mr-2"></i><strong>Iklan Melayang Mobile AdSense</strong></span><span class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400">Sponsor</span></div>' }
+                }
+            },
+            logs: []
+        };
+
+        // LOCAL PUBLISHER IDENTITY
+        // This is a UI-level ownership boundary only. Real multi-user security requires a backend.
+        const LOCAL_PUBLISHER_ID = localStorage.getItem('arustren_publisher_id') || ('pub_' + crypto.randomUUID());
+        localStorage.setItem('arustren_publisher_id', LOCAL_PUBLISHER_ID);
+
+        // Keep the configured AdSense Publisher ID synchronized with the site account.
+        // This prevents an older value saved in localStorage from overriding the current ID.
+        const ADSENSE_PUBLISHER_ID = 'ca-pub-5462727366652523';
+        state.ads.pubId = ADSENSE_PUBLISHER_ID;
+        localStorage.setItem('arustren_ads', JSON.stringify(state.ads));
+
+        // AI CONFIGURATION
+        state.ai = JSON.parse(localStorage.getItem('arustren_ai')) || {
+            provider: 'gemini',
+            model: 'gemini-3.8-flash',
+            customUrl: '',
+            keys: { gemini: '', openai: '', xai: '', anthropic: '', xkiro: '', custom: '' }
+        };
+        // Migrate the previous single Gemini key format if it exists.
+        if (!state.ai.keys) state.ai.keys = { gemini: '', openai: '', xai: '', anthropic: '', xkiro: '', custom: '' };
+        if (!Object.prototype.hasOwnProperty.call(state.ai.keys, 'xkiro')) state.ai.keys.xkiro = '';
+        if (state.ai.apiKey && !state.ai.keys.gemini) state.ai.keys.gemini = state.ai.apiKey;
+        if (!state.ai.provider) state.ai.provider = 'gemini';
+        if (!state.ai.model) state.ai.model = 'gemini-3.8-flash';
+        if (!state.ai.customUrl) state.ai.customUrl = '';
+        localStorage.setItem('arustren_ai', JSON.stringify(state.ai));
+
+        // ON PAGE LOAD INITIALIZATION
+        window.addEventListener('DOMContentLoaded', () => {
+            // Initialize Quill Editor
+            quillEditor = new Quill('#editor-container', {
+                theme: 'snow',
+                placeholder: 'Tuliskan isi narasi berita terlengkap di sini...'
+            });
+            document.getElementById('input-title')?.addEventListener('input', updateSEOCheck);
+            document.getElementById('input-tags')?.addEventListener('input', updateSEOCheck);
+            quillEditor.on('text-change', updateSEOCheck);
+
+            initializeGoogleAdSense();
+            currentUser = getCurrentUser();
+            updateAuthUI();
+
+            // Set Current Date Display
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
+            document.getElementById('current-date-display').innerText = dateStr;
+
+            // Load Ads Fields & Setup UI
+            populateAdSettingsFields();
+            applyAdsToLayout();
+            renderPortalView();
+            renderStudioDashboard();
+
+            // Refresh factual metrics; no random/simulated traffic.
+            refreshFactualMetrics();
+        });
+
+        // TOAST NOTIFICATION SYSTEM
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colorClass = type === 'success' ? 'bg-emerald-600 border-emerald-400' : 'bg-rose-600 border-rose-400';
+            const icon = type === 'success' ? 'fa-circle-check' : 'fa-circle-exclamation';
+
+            toast.className = `pointer-events-auto flex items-center space-x-3 px-4 py-3 rounded-2xl border text-white text-xs font-semibold shadow-2xl transition-all duration-300 transform translate-y-2 opacity-0 ${colorClass}`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-sm"></i><span>${message}</span>`;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3200);
+        }
+
+        // VIEW MODE SWITCHER (Public Portal vs Publisher Studio)
+        function switchViewMode(mode) {
+            if (mode === 'studio' && !requireLogin('membuka Studio Publisher')) return;
+            currentViewMode = mode;
+            const portalEl = document.getElementById('view-mode-portal');
+            const studioEl = document.getElementById('view-mode-studio');
+            const btnPortal = document.getElementById('btn-mode-portal');
+            const btnStudio = document.getElementById('btn-mode-studio');
+            const catNav = document.getElementById('portal-cat-nav');
+
+            if (mode === 'portal') {
+                portalEl.classList.remove('hidden');
+                studioEl.classList.add('hidden');
+                catNav.classList.remove('hidden');
+
+                btnPortal.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 bg-sky-600 text-white shadow-md";
+                btnStudio.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 text-slate-400 hover:text-white";
+                renderPortalView();
+            } else {
+                portalEl.classList.add('hidden');
+                studioEl.classList.remove('hidden');
+                catNav.classList.add('hidden');
+
+                btnStudio.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 bg-sky-600 text-white shadow-md";
+                btnPortal.className = "px-4 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-2 text-slate-400 hover:text-white";
+                renderStudioDashboard();
+            }
+        }
+
+        // STUDIO SUBVIEW TABS
+        function navStudioTab(tabName) {
+            if (tabName === 'ads') {
+                showToast('Pengaturan iklan global dikunci. Tambahkan AdSense hanya dari artikel milikmu.', 'error');
+                tabName = 'editor';
+            }
+            const tabs = ['dashboard', 'editor', 'ads', 'syndication'];
+            tabs.forEach(t => {
+                const subview = document.getElementById(`studio-subview-${t}`);
+                const btn = document.getElementById(`tab-studio-${t}`);
+                if (subview) subview.classList.add('hidden');
+                if (btn) {
+                    btn.classList.remove('bg-sky-600/20', 'text-sky-300', 'border', 'border-sky-500/30');
+                    btn.classList.add('text-slate-400');
+                }
+            });
+
+            const activeSubview = document.getElementById(`studio-subview-${tabName}`);
+            const activeBtn = document.getElementById(`tab-studio-${tabName}`);
+            if (activeSubview) activeSubview.classList.remove('hidden');
+            if (activeBtn) {
+                activeBtn.classList.add('bg-sky-600/20', 'text-sky-300', 'border', 'border-sky-500/30');
+                activeBtn.classList.remove('text-slate-400');
+            }
+        }
+
+        // RENDER WEBSITE RESMI / PUBLIC NEWS PORTAL
+        function renderPortalView() {
+            renderHeroFeatured();
+            renderPortalNewsGrid();
+            renderTrendingList();
+            updateSidebarWidgetStats();
+        }
+
+        function filterCategory(cat) {
+            selectedCategoryFilter = cat;
+            document.querySelectorAll('.cat-nav-btn').forEach(btn => {
+                if (btn.innerText.includes(cat) || (cat === 'ALL' && btn.innerText.includes('Semua'))) {
+                    btn.className = "cat-nav-btn active px-3.5 py-1.5 rounded-lg text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 transition font-bold";
+                } else {
+                    btn.className = "cat-nav-btn px-3.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition";
+                }
+            });
+            document.getElementById('active-cat-label').innerText = cat === 'ALL' ? 'Semua Berita' : cat;
+            renderPortalNewsGrid();
+        }
+
+        function handleSearch() {
+            renderPortalNewsGrid();
+        }
+
+        function renderHeroFeatured() {
+            const container = document.getElementById('hero-featured-container');
+            if (!container || state.articles.length === 0) return;
+
+            const hero = state.articles[0]; // Primary Headline Article
+            const secondary = state.articles.slice(1, 3); // Sub-headlines
+
+            container.innerHTML = `
+                <!-- Main Big Hero Card -->
+                <div class="lg:col-span-2 relative rounded-3xl overflow-hidden bg-slate-900 border border-slate-800 group h-[380px] sm:h-[440px] cursor-pointer shadow-2xl" onclick="openReaderModal(${hero.id})">
+                    <img src="${hero.cover}" alt="${hero.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500 opacity-70">
+                    <div class="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/50 to-transparent p-6 sm:p-8 flex flex-col justify-end space-y-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="bg-sky-600 text-white text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
+                                ${hero.category}
+                            </span>
+                            <span class="bg-rose-500/80 backdrop-blur text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center">
+                                <i class="fa-solid fa-fire mr-1"></i> HEADLINE UTAMA
+                            </span>
+                        </div>
+                        <h2 class="text-xl sm:text-3xl font-extrabold text-white group-hover:text-sky-300 transition leading-snug">
+                            ${hero.title}
+                        </h2>
+                        <p class="text-xs sm:text-sm text-slate-300 line-clamp-2">${hero.excerpt}</p>
+                        <div class="flex items-center space-x-4 text-xs text-slate-400 pt-1">
+                            <span><i class="fa-solid fa-user-edit text-sky-400 mr-1"></i> ${hero.author}</span>
+                            <span>•</span>
+                            <span><i class="fa-solid fa-eye text-amber-400 mr-1"></i> ${hero.views} Pembaca</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Secondary Headlines Stack -->
+                <div class="space-y-4 flex flex-col justify-between">
+                    ${secondary.map(art => `
+                        <div onclick="openReaderModal(${art.id})" class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 flex gap-4 hover:border-sky-500/50 cursor-pointer transition group flex-1">
+                            <img src="${art.cover}" class="w-24 h-24 sm:w-28 sm:h-28 rounded-xl object-cover flex-shrink-0 group-hover:scale-105 transition">
+                            <div class="flex flex-col justify-between">
+                                <div>
+                                    <span class="text-[10px] text-sky-400 font-bold uppercase">${art.category}</span>
+                                    <h3 class="font-bold text-white text-xs sm:text-sm line-clamp-2 group-hover:text-sky-300 transition mt-0.5">
+                                        ${art.title}
+                                    </h3>
+                                </div>
+                                <div class="text-[10px] text-slate-400 flex items-center space-x-2">
+                                    <span>${art.date}</span>
+                                    <span>•</span>
+                                    <span><i class="fa-solid fa-eye text-sky-400"></i> ${art.views}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderPortalNewsGrid() {
+            const container = document.getElementById('portal-news-grid');
+            const searchVal = document.getElementById('portal-search-input').value.toLowerCase();
+
+            let list = state.articles;
+
+            if (selectedCategoryFilter !== 'ALL') {
+                list = list.filter(a => a.category === selectedCategoryFilter);
+            }
+
+            if (searchVal) {
+                list = list.filter(a => a.title.toLowerCase().includes(searchVal) || a.excerpt.toLowerCase().includes(searchVal));
+            }
+
+            if (list.length === 0) {
+                container.innerHTML = `
+                    <div class="col-span-full py-12 text-center text-slate-500 bg-slate-900/40 rounded-2xl border border-slate-800">
+                        <i class="fa-solid fa-newspaper text-3xl mb-2 text-slate-600"></i>
+                        <p class="text-xs">Tidak ada artikel berita yang cocok dengan kriteria pencarian.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = list.map(art => `
+                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden hover:border-sky-500/50 transition flex flex-col justify-between group shadow-lg">
+                    <div>
+                        <div class="relative h-44 overflow-hidden bg-slate-950 cursor-pointer" onclick="openReaderModal(${art.id})">
+                            <img src="${art.cover}" alt="${art.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+                            <span class="absolute top-3 left-3 bg-slate-950/80 backdrop-blur text-sky-300 text-[10px] font-bold px-2.5 py-1 rounded-full border border-sky-500/30">
+                                ${art.category}
+                            </span>
+                        </div>
+
+                        <div class="p-5 space-y-2">
+                            <h3 onclick="openReaderModal(${art.id})" class="font-bold text-white text-sm sm:text-base line-clamp-2 leading-snug group-hover:text-sky-300 cursor-pointer transition">
+                                ${art.title}
+                            </h3>
+                            <p class="text-xs text-slate-400 line-clamp-2">${art.excerpt}</p>
+                        </div>
+                    </div>
+
+                    <div class="px-5 pb-4 pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
+                        <div class="flex items-center space-x-2 text-[11px]">
+                            <span><i class="fa-solid fa-eye text-sky-400 mr-1"></i> ${art.views}</span>
+                            <span>•</span>
+                            <span><i class="fa-solid fa-heart text-rose-400 mr-1"></i> ${art.likes || 0}</span>
+                        </div>
+
+                        <button onclick="openReaderModal(${art.id})" class="px-3 py-1 bg-sky-600/20 text-sky-300 hover:bg-sky-600 hover:text-white rounded-lg font-bold transition text-xs flex items-center">
+                            Baca Berita <i class="fa-solid fa-arrow-right ml-1"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderTrendingList() {
+            const container = document.getElementById('trending-list-box');
+            if (!container) return;
+
+            // Sort by views desc
+            const sorted = [...state.articles].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5);
+
+            container.innerHTML = sorted.map((art, idx) => `
+                <div onclick="openReaderModal(${art.id})" class="flex items-center space-x-3 p-2 rounded-xl hover:bg-slate-800/60 cursor-pointer transition group">
+                    <span class="w-7 h-7 rounded-lg bg-slate-800 font-extrabold text-xs text-sky-400 flex items-center justify-center flex-shrink-0 group-hover:bg-sky-600 group-hover:text-white transition">
+                        #${idx + 1}
+                    </span>
+                    <div class="truncate">
+                        <h4 class="font-bold text-white text-xs truncate group-hover:text-sky-300 transition">${art.title}</h4>
+                        <p class="text-[10px] text-slate-400">${art.category} • ${art.views} Views</p>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // OPEN FULL ARTICLE READER MODAL
+        function openReaderModal(id) {
+            const art = state.articles.find(a => a.id == id);
+            if (!art) return;
+
+            currentActiveArticleId = id;
+
+            // Record one factual article-open per session for this article.
+            // This prevents refreshes/duplicate renders from silently inflating views.
+            const viewKey = `arustren_viewed_${art.id}`;
+            if (!sessionStorage.getItem(viewKey)) {
+                art.views = Number(art.views || 0) + 1;
+                sessionStorage.setItem(viewKey, '1');
+                localStorage.setItem('arustren_articles', JSON.stringify(state.articles));
+            }
+
+            // Populate Modal Content
+            document.getElementById('read-category').innerText = art.category;
+            document.getElementById('read-title').innerText = art.title;
+            document.getElementById('read-author').innerText = art.author;
+            document.getElementById('read-date').innerText = art.date;
+            document.getElementById('read-time').innerText = art.readTime || '3 min baca';
+            document.getElementById('read-cover-img').src = art.cover;
+            document.getElementById('read-views-count').innerText = art.views;
+            document.getElementById('read-likes-count').innerText = art.likes || 0;
+            document.getElementById('read-summary').innerText = art.summary || art.excerpt;
+            document.getElementById('read-content-body').innerHTML = art.content;
+
+            // Article-specific AdSense unit. Each article can use a different Ad Unit ID.
+            renderArticleAdSlot('ad-render-arttop', art.adsenseSlot, 'Iklan dalam artikel');
+            renderArticleAdSlot('ad-render-artbottom', art.adsenseSlot, 'Iklan akhir artikel');
+
+            // No simulated active-reader number. A real online count requires server-side presence tracking.
+            document.getElementById('read-active-users-num').innerText = '--';
+            const liveReaderLabel = document.getElementById('read-live-readers');
+            if (liveReaderLabel) liveReaderLabel.title = 'Jumlah pembaca online global belum dapat dihitung tanpa backend realtime.';
+
+            // Reactions count
+            document.getElementById('react-suka-num').innerText = art.reactions?.suka || 0;
+            document.getElementById('react-info-num').innerText = art.reactions?.informatif || 0;
+            document.getElementById('react-kagum-num').innerText = art.reactions?.kagum || 0;
+
+            // Crosspost Badges
+            const badgesBox = document.getElementById('read-crosspost-badges');
+            badgesBox.innerHTML = '';
+            if (art.cross?.medium) badgesBox.innerHTML += `<span class="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">Medium</span>`;
+            if (art.cross?.devto) badgesBox.innerHTML += `<span class="bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded text-[10px] font-bold">Dev.to</span>`;
+            if (art.cross?.wp) badgesBox.innerHTML += `<span class="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-[10px] font-bold">WordPress</span>`;
+
+            // Render Injected In-Article Ad Slots
+            const artTopAdBox = document.getElementById('ad-render-arttop');
+            const artBottomAdBox = document.getElementById('ad-render-artbottom');
+
+            if (state.ads.slots.artTop.active && state.ads.slots.artTop.code) {
+                artTopAdBox.innerHTML = state.ads.slots.artTop.code;
+                artTopAdBox.classList.remove('hidden');
+            } else { artTopAdBox.classList.add('hidden'); }
+
+            if (state.ads.slots.artBottom.active && state.ads.slots.artBottom.code) {
+                artBottomAdBox.innerHTML = state.ads.slots.artBottom.code;
+                artBottomAdBox.classList.remove('hidden');
+            } else { artBottomAdBox.classList.add('hidden'); }
+
+            // Render Comments
+            renderArticleComments(art);
+
+            document.getElementById('modal-reader').classList.remove('hidden');
+            document.getElementById('reader-scroll-area').scrollTop = 0;
+            updateReadingProgress();
+            renderPortalView();
+        }
+
+        function closeReaderModal() {
+            document.getElementById('modal-reader').classList.add('hidden');
+        }
+
+        function updateReadingProgress() {
+            const scrollArea = document.getElementById('reader-scroll-area');
+            const progressLine = document.getElementById('reading-progress');
+            if (!scrollArea || !progressLine) return;
+
+            const totalHeight = scrollArea.scrollHeight - scrollArea.clientHeight;
+            const scrolled = (scrollArea.scrollTop / totalHeight) * 100;
+            progressLine.style.width = `${Math.min(100, Math.max(0, scrolled))}%`;
+        }
+
+        function addArticleLike() {
+            if (!currentActiveArticleId) return;
+            const art = state.articles.find(a => a.id == currentActiveArticleId);
+            if (!art) return;
+
+            art.likes = (art.likes || 0) + 1;
+            document.getElementById('read-likes-count').innerText = art.likes;
+            localStorage.setItem('arustren_articles', JSON.stringify(state.articles));
+            showToast('Terima kasih menyukai berita ini!');
+        }
+
+        function triggerReaction(type) {
+            if (!currentActiveArticleId) return;
+            const art = state.articles.find(a => a.id == currentActiveArticleId);
+            if (!art) return;
+
+            if (!art.reactions) art.reactions = { suka: 0, informatif: 0, kagum: 0 };
+            art.reactions[type] = (art.reactions[type] || 0) + 1;
+
+            document.getElementById('react-suka-num').innerText = art.reactions.suka;
+            document.getElementById('react-info-num').innerText = art.reactions.informatif;
+            document.getElementById('react-kagum-num').innerText = art.reactions.kagum;
+
+            localStorage.setItem('arustren_articles', JSON.stringify(state.articles));
+            showToast(`Reaksi '${type}' berhasil dikirim!`);
+        }
+
+        function renderArticleComments(art) {
+            const container = document.getElementById('comments-list-box');
+            const countBadge = document.getElementById('comments-count-badge');
+            
+            const comments = art.comments || [];
+            countBadge.innerText = `${comments.length} Komentar`;
+
+            if (comments.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-500 py-3 text-center">Belum ada komentar. Jadilah yang pertama memberikan tanggapan!</p>`;
+                return;
+            }
+
+            container.innerHTML = comments.map(c => `
+                <div class="p-3.5 bg-slate-950/90 rounded-xl border border-slate-800 space-y-1">
+                    <div class="flex justify-between items-center text-xs">
+                        <span class="font-bold text-sky-400">${c.name} <span class="text-[10px] text-slate-500 font-normal">(${c.city || 'Indonesia'})</span></span>
+                        <span class="text-[10px] text-slate-500">${c.time || 'Baru saja'}</span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-relaxed">${c.text}</p>
+                </div>
+            `).join('');
+        }
+
+        function submitUserComment(e) {
+            e.preventDefault();
+            if (!currentActiveArticleId) return;
+
+            const art = state.articles.find(a => a.id == currentActiveArticleId);
+            if (!art) return;
+
+            const author = document.getElementById('comment-author').value.trim();
+            const city = document.getElementById('comment-city').value.trim() || 'Indonesia';
+            const text = document.getElementById('comment-text').value.trim();
+
+            if (!art.comments) art.comments = [];
+            art.comments.unshift({ name: author, city, text, time: 'Baru saja' });
+
+            document.getElementById('comment-text').value = '';
+            localStorage.setItem('arustren_articles', JSON.stringify(state.articles));
+            
+            renderArticleComments(art);
+            showToast('Komentar kamu berhasil dipublikasikan!');
+        }
+
+        // STUDIO DASHBOARD RENDER
+        function renderStudioDashboard() {
+            updateDashboardStats();
+            renderStudioArticlesTable();
+        }
+
+        function getMyArticles() {
+            return currentUser ? state.articles.filter(a => a.ownerId === currentUser.id) : [];
+        }
+
+        function updateDashboardStats() {
+            const myArticles = getMyArticles();
+            const totalArticles = myArticles.length;
+            const totalViews = myArticles.reduce((acc, curr) => acc + Number(curr.views || 0), 0);
+            const activeSlotsCount = myArticles.filter(a => !!a.adsenseSlot).length;
+
+            document.getElementById('stat-total-articles').innerText = totalArticles.toLocaleString('id-ID');
+            document.getElementById('stat-total-views').innerText = totalViews.toLocaleString('id-ID');
+            document.getElementById('stat-est-revenue').innerText = 'Belum tersedia';
+            document.getElementById('stat-active-ads').innerText = `${activeSlotsCount}`;
+            document.getElementById('ads-active-badge').innerText = `${activeSlotsCount} Artikel`;
+            updateSidebarWidgetStats();
+        }
+
+        function updateSidebarWidgetStats() {
+            const myArticles = getMyArticles();
+            const totalViews = myArticles.reduce((acc, curr) => acc + Number(curr.views || 0), 0);
+            const activeSlotsCount = myArticles.filter(a => !!a.adsenseSlot).length;
+            const widgetEarning = document.getElementById('widget-est-earning');
+            const widgetViews = document.getElementById('widget-total-views');
+            const widgetAds = document.getElementById('widget-active-ads-count');
+            if (widgetEarning) widgetEarning.innerText = 'Belum tersedia';
+            if (widgetViews) widgetViews.innerText = totalViews.toLocaleString('id-ID');
+            if (widgetAds) widgetAds.innerText = `${activeSlotsCount}`;
+        }
+
+        function exportMyAnalytics() {
+            if (!requireLogin('mengekspor analitik')) return;
+            const rows = [['Judul','Tanggal','Views Tercatat','AdSense Slot']];
+            getMyArticles().forEach(a => rows.push([a.title, a.date || '', Number(a.views || 0), a.adsenseSlot || '']));
+            downloadCsv('arustren-analytics.csv', rows);
+            showToast('Analitik nyata berhasil diekspor.');
+        }
+
+        function exportMyArticles() {
+            if (!requireLogin('mengekspor artikel')) return;
+            const rows = [['Judul','Kategori','Tanggal','Views Tercatat','Status AdSense']];
+            getMyArticles().forEach(a => rows.push([a.title, a.category, a.date || '', Number(a.views || 0), a.adsenseSlot ? 'Terpasang' : 'Belum']));
+            downloadCsv('arustren-artikel.csv', rows);
+            showToast('Daftar artikel berhasil diekspor.');
+        }
+
+        function downloadCsv(filename, rows) {
+            const csv = rows.map(row => row.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 500);
+        }
+
+        function filterStudioArticles(query) {
+            renderStudioArticlesTable(query);
+        }
+
+        function updateSEOCheck() {
+            const el = document.getElementById('seo-checker');
+            if (!el || !quillEditor) return;
+            const title = document.getElementById('input-title')?.value.trim() || '';
+            const tags = document.getElementById('input-tags')?.value.trim() || '';
+            const text = quillEditor.getText().trim();
+            const checks = [title.length >= 30 && title.length <= 70, tags.split(',').filter(Boolean).length >= 3, text.length >= 500];
+            const score = checks.filter(Boolean).length;
+            const labels = ['Judul ideal', 'Minimal 3 tag', 'Konten minimal 500 karakter'];
+            el.innerHTML = `<strong class="${score >= 2 ? 'text-emerald-400' : 'text-amber-400'}">SEO ${score}/3</strong> · ${labels.map((x,i)=>`${checks[i]?'✓':'○'} ${x}`).join(' · ')}`;
+        }
+
+        function backupMyData() {
+            if (!requireLogin('membuat backup')) return;
+            const payload = { version: 1, exportedAt: new Date().toISOString(), ownerId: currentUser.id, articles: getMyArticles() };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+            const url = URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='arustren-backup.json'; a.click();
+            setTimeout(()=>URL.revokeObjectURL(url),500);
+            showToast('Backup artikel akun berhasil dibuat.');
+        }
+
+        async function restoreMyData(event) {
+            if (!requireLogin('memulihkan backup')) return;
+            const file = event.target.files?.[0]; if (!file) return;
+            try {
+                const payload = JSON.parse(await file.text());
+                if (!Array.isArray(payload.articles)) throw new Error('Format backup tidak valid.');
+                const imported = payload.articles.filter(a => a && a.ownerId === currentUser.id && a.title);
+                if (!imported.length) throw new Error('Tidak ada artikel milik akun ini di backup.');
+                const ids = new Set(imported.map(a=>String(a.id)));
+                state.articles = state.articles.filter(a => !(a.ownerId === currentUser.id && ids.has(String(a.id))));
+                state.articles.push(...imported);
+                localStorage.setItem('arustren_articles', JSON.stringify(state.articles));
+                renderStudioDashboard(); renderPortalView();
+                showToast(`${imported.length} artikel berhasil dipulihkan.`);
+            } catch (err) { showToast(err.message || 'Backup gagal dipulihkan.', 'error'); }
+            event.target.value = '';
+        }
+
+        function renderStudioArticlesTable(query='') {
+            const container = document.getElementById('studio-articles-list');
+            if (!container) return;
+
+            const q = String(query || '').trim().toLowerCase();
+            const myArticles = state.articles.filter(a => !currentUser ? false : a.ownerId === currentUser.id).filter(a => !q || `${a.title} ${a.category} ${a.tags || ''}`.toLowerCase().includes(q));
+            if (myArticles.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-500 py-4 text-center">Belum ada artikel berita.</p>`;
+                return;
+            }
+
+            container.innerHTML = myArticles.map(a => `
+                <div class="flex items-center justify-between p-3.5 bg-slate-950/80 rounded-xl border border-slate-800">
+                    <div class="flex items-center space-x-3 truncate">
+                        <img src="${a.cover}" class="w-12 h-12 rounded-lg object-cover flex-shrink-0">
+                        <div class="truncate">
+                            <h4 class="font-bold text-white text-xs truncate">${a.title}</h4>
+                            <p class="text-[10px] text-slate-400">${a.category} • ${a.date} • <strong class="text-sky-400">${a.views || 0} Views</strong></p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-2 ml-2 flex-shrink-0">
+                        <button onclick="openReaderModal(${a.id})" class="p-2 bg-slate-800 hover:bg-slate-700 text-sky-400 rounded-lg text-xs" title="Pratinjau"><i class="fa-solid fa-eye"></i></button>
+                        <button ${a.ownerId === getActiveOwnerId() ? '' : 'disabled'} onclick="editArticle(${a.id})" class="p-2 bg-slate-800 hover:bg-slate-700 text-amber-400 rounded-lg text-xs" title="Edit"><i class="fa-solid fa-pen"></i></button>
+                        <button ${a.ownerId === getActiveOwnerId() ? '' : 'disabled'} onclick="deleteArticle(${a.id})" class="p-2 bg-slate-800 hover:bg-slate-700 text-rose-400 rounded-lg text-xs" title="Hapus"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ARTICLE FORM ACTIONS
+        function openNewArticleEditor() {
+            if (!requireLogin('menulis berita')) return;
+            switchViewMode('studio');
+            navStudioTab('editor');
+
+            document.getElementById('edit-article-id').value = '';
+            document.getElementById('input-title').value = '';
+            document.getElementById('input-cover').value = '';
+            document.getElementById('input-tags').value = '';
+            document.getElementById('cover-preview-box').classList.add('hidden');
+            quillEditor.setContents([]);
+            updateSEOCheck();
+        }
+
+        function saveArticle(e) {
+            e.preventDefault();
+            if (!requireLogin('menyimpan artikel')) return;
+
+            const editId = document.getElementById('edit-article-id').value;
+            const title = document.getElementById('input-title').value.trim();
+            const category = document.getElementById('input-category').value;
+            const author = document.getElementById('input-author').value || 'Redaksi ArusTren';
+            const tags = document.getElementById('input-tags').value;
+            const adsenseSlot = document.getElementById('input-adsense-slot').value.trim();
+            const existingArticle = editId ? state.articles.find(a => a.id == editId) : null;
+            if (existingArticle?.ownerId && existingArticle.ownerId !== getActiveOwnerId()) { showToast('Kamu tidak dapat mengubah iklan artikel milik pengguna lain.', 'error'); return; }
+            const ownerId = editId ? (state.articles.find(a => a.id == editId)?.ownerId || getActiveOwnerId()) : getActiveOwnerId();
+            const cover = document.getElementById('input-cover').value || 'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?auto=format&fit=crop&w=1200&q=80';
+            const content = quillEditor.root.innerHTML;
+
+            const textContent = quillEditor.getText();
+            const excerpt = textContent.slice(0, 130) + '...';
+            const wordCount = textContent.trim().split(/\s+/).length;
+            const readTime = Math.max(1, Math.ceil(wordCount / 200)) + ' mnt';
+
+            const crossMedium = document.getElementById('check-cross-medium').checked;
+            const crossDevTo = document.getElementById('check-cross-devto').checked;
+            const crossWp = document.getElementById('check-cross-wordpress').checked;
+
+            if (editId) {
+                const idx = state.articles.findIndex(a => a.id == editId);
+                if (idx !== -1) {
+                    state.articles[idx] = {
+                        ...state.articles[idx],
+                        title, category, author, tags, cover, content, excerpt, readTime, adsenseSlot, ownerId,
+                        cross: { medium: crossMedium, devto: crossDevTo, wp: crossWp }
+                    };
+                    showToast('Artikel berhasil diperbarui!');
+                }
+            } else {
+                const newArt = {
+                    id: Date.now(),
+                    title, category, author, tags, cover, content, excerpt, readTime, adsenseSlot, ownerId,
+                    summary: excerpt,
+                    date: new Date().toLocaleDateString('id-ID'),
+                    views: 0,
+                    likes: 0,
+                    comments: [],
+                    reactions: { suka: 0, informatif: 0, kagum: 0 },
+                    cross: { medium: crossMedium, devto: crossDevTo, wp: crossWp }
+                };
+                state.articles.unshift(newArt);
+                showToast('Artikel berita baru dipublikasikan!');
+            }
+
+            localStorage.setItem('arustren_articles', JSON.stringify(state.articles));
+            switchViewMode('portal');
+        }
+
+        function editArticle(id) {
+            const art = state.articles.find(a => a.id == id);
+            if (!art) return;
+            if (!requireLogin('mengedit artikel')) return;
+            if (art.ownerId && art.ownerId !== getActiveOwnerId()) { showToast('Artikel ini bukan milik akun/perangkat kamu.', 'error'); return; }
+
+            document.getElementById('edit-article-id').value = art.id;
+            document.getElementById('input-title').value = art.title;
+            document.getElementById('input-category').value = art.category;
+            document.getElementById('input-author').value = art.author;
+            document.getElementById('input-tags').value = art.tags;
+            document.getElementById('input-adsense-slot').value = art.adsenseSlot || '';
+            document.getElementById('input-cover').value = art.cover;
+
+            if (art.cover) {
+                document.getElementById('img-cover-preview').src = art.cover;
+                document.getElementById('cover-preview-box').classList.remove('hidden');
+            }
+
+            quillEditor.root.innerHTML = art.content;
+            updateSEOCheck();
+            switchViewMode('studio');
+            navStudioTab('editor');
+        }
+
+        function deleteArticle(id) {
+            const art = state.articles.find(a => a.id == id);
+            if (!requireLogin('menghapus artikel')) return;
+            if (art?.ownerId && art.ownerId !== getActiveOwnerId()) { showToast('Kamu tidak memiliki izin menghapus artikel ini.', 'error'); return; }
+            if (confirm('Apakah kamu yakin ingin menghapus artikel berita ini?')) {
+                state.articles = state.articles.filter(a => a.id != id);
+                localStorage.setItem('arustren_articles', JSON.stringify(state.articles));
+                showToast('Artikel telah dihapus');
+                renderStudioDashboard();
+                renderPortalView();
+            }
+        }
+
+        // GOOGLE ADSENSE AUTO ADS INITIALIZATION
+        // The official AdSense script in <head> handles Auto Ads placement.
+        // We only initialize the global queue here; no fake ad-slot ID is used.
+        function initializeGoogleAdSense() {
+            window.adsbygoogle = window.adsbygoogle || [];
+            try {
+                window.adsbygoogle.push({
+                    google_ad_client: ADSENSE_PUBLISHER_ID,
+                    enable_page_level_ads: true
+                });
+            } catch (error) {
+                console.warn('Google AdSense belum siap:', error);
+            }
+        }
+
+        // ADSENSE & LAYOUT CONFIGURATION
+        function populateAdSettingsFields() {
+            document.getElementById('ads-pub-id').value = state.ads.pubId || '';
+            document.getElementById('ads-auto-script').value = state.ads.autoScript || '';
+
+            document.getElementById('slot-header-active').checked = state.ads.slots.header.active;
+            document.getElementById('slot-header-code').value = state.ads.slots.header.code || '';
+
+            document.getElementById('slot-arttop-active').checked = state.ads.slots.artTop.active;
+            document.getElementById('slot-arttop-code').value = state.ads.slots.artTop.code || '';
+
+            document.getElementById('slot-artbottom-active').checked = state.ads.slots.artBottom.active;
+            document.getElementById('slot-artbottom-code').value = state.ads.slots.artBottom.code || '';
+
+            document.getElementById('slot-sidebar-active').checked = state.ads.slots.sidebar.active;
+            document.getElementById('slot-sidebar-code').value = state.ads.slots.sidebar.code || '';
+
+            document.getElementById('slot-footer-active').checked = state.ads.slots.footer.active;
+            document.getElementById('slot-footer-code').value = state.ads.slots.footer.code || '';
+        }
+
+        function saveAdSettings() {
+            state.ads.pubId = document.getElementById('ads-pub-id').value.trim();
+            state.ads.autoScript = document.getElementById('ads-auto-script').value.trim();
+
+            state.ads.slots.header.active = document.getElementById('slot-header-active').checked;
+            state.ads.slots.header.code = document.getElementById('slot-header-code').value;
+
+            state.ads.slots.artTop.active = document.getElementById('slot-arttop-active').checked;
+            state.ads.slots.artTop.code = document.getElementById('slot-arttop-code').value;
+
+            state.ads.slots.artBottom.active = document.getElementById('slot-artbottom-active').checked;
+            state.ads.slots.artBottom.code = document.getElementById('slot-artbottom-code').value;
+
+            state.ads.slots.sidebar.active = document.getElementById('slot-sidebar-active').checked;
+            state.ads.slots.sidebar.code = document.getElementById('slot-sidebar-code').value;
+
+            state.ads.slots.footer.active = document.getElementById('slot-footer-active').checked;
+            state.ads.slots.footer.code = document.getElementById('slot-footer-code').value;
+
+            localStorage.setItem('arustren_ads', JSON.stringify(state.ads));
+            showToast('Konfigurasi AdSense berhasil disimpan!');
+
+            applyAdsToLayout();
+            updateDashboardStats();
+        }
+
+        function applyAdsToLayout() {
+            // Header Ad Slot
+            const headerBox = document.getElementById('ad-render-header');
+            if (state.ads.slots.header.active && state.ads.slots.header.code) {
+                headerBox.innerHTML = state.ads.slots.header.code;
+                headerBox.classList.remove('hidden');
+            } else { headerBox.classList.add('hidden'); }
+
+            // Sidebar Ad Slot
+            const sidebarBox = document.getElementById('ad-render-sidebar');
+            if (state.ads.slots.sidebar.active && state.ads.slots.sidebar.code) {
+                sidebarBox.innerHTML = state.ads.slots.sidebar.code;
+                sidebarBox.classList.remove('hidden');
+            } else { sidebarBox.classList.add('hidden'); }
+
+            // Sticky Footer Ad Slot
+            const footerBox = document.getElementById('ad-render-footer');
+            if (state.ads.slots.footer.active && state.ads.slots.footer.code) {
+                footerBox.innerHTML = state.ads.slots.footer.code;
+                footerBox.classList.remove('hidden');
+            } else { footerBox.classList.add('hidden'); }
+        }
+
+        // RENDER A REAL, ARTICLE-SPECIFIC ADSENSE UNIT
+        // The slot ID must be a real AdSense Ad Unit ID created in the publisher account.
+        function renderArticleAdSlot(containerId, slotId, label) {
+            const box = document.getElementById(containerId);
+            if (!box) return;
+            box.innerHTML = '';
+            if (!slotId || !/^\d{6,}$/.test(String(slotId))) {
+                box.classList.add('hidden');
+                return;
+            }
+
+            const ins = document.createElement('ins');
+            ins.className = 'adsbygoogle';
+            ins.style.display = 'block';
+            ins.setAttribute('data-ad-client', ADSENSE_PUBLISHER_ID);
+            ins.setAttribute('data-ad-slot', String(slotId));
+            ins.setAttribute('data-ad-format', 'auto');
+            ins.setAttribute('data-full-width-responsive', 'true');
+            box.appendChild(ins);
+            box.classList.remove('hidden');
+
+            try {
+                (window.adsbygoogle = window.adsbygoogle || []).push({});
+            } catch (error) {
+                console.warn('AdSense article slot belum siap:', error);
+            }
+        }
+
+        // MULTI-PROVIDER AI INTEGRATION
+        const AI_PROVIDER_DEFAULTS = {
+            gemini: { model: 'gemini-3.8-flash' },
+            openai: { model: 'gpt-5.2' },
+            xai: { model: 'grok-4.7' },
+            anthropic: { model: 'claude-sonnet-4-5' },
+            xkiro: { model: 'openai/gpt-5.6-sol' },
+            custom: { model: '' }
+        };
+
+        function openAIModal(mode) {
+            aiMode = mode;
+            document.getElementById('ai-prompt-label').innerText = mode === 'article' ? 'Topik Utama Berita' : 'Topik Ide Judul Berita';
+            document.getElementById('ai-provider').value = state.ai?.provider || 'gemini';
+            document.getElementById('ai-model').value = state.ai?.model || AI_PROVIDER_DEFAULTS[state.ai?.provider || 'gemini'].model;
+            document.getElementById('ai-api-key').value = state.ai?.keys?.[state.ai?.provider || 'gemini'] || '';
+            document.getElementById('ai-custom-url').value = state.ai?.customUrl || '';
+            updateAIProviderUI();
+            document.getElementById('modal-ai').classList.remove('hidden');
+        }
+
+        function closeAIModal() {
+            document.getElementById('modal-ai').classList.add('hidden');
+        }
+
+        function updateAIProviderUI() {
+            const provider = document.getElementById('ai-provider').value;
+            const defaults = AI_PROVIDER_DEFAULTS[provider] || {};
+            const modelInput = document.getElementById('ai-model');
+            const current = modelInput.value.trim();
+            if (!current || Object.values(AI_PROVIDER_DEFAULTS).some(x => x.model === current)) modelInput.value = defaults.model || '';
+            document.getElementById('ai-custom-url-box').classList.toggle('hidden', provider !== 'custom');
+            document.getElementById('btn-xkiro-models').classList.toggle('hidden', provider !== 'xkiro');
+            document.getElementById('ai-api-key').value = state.ai?.keys?.[provider] || '';
+            const names = { gemini: 'Gemini', openai: 'OpenAI', xai: 'Grok', anthropic: 'Claude', xkiro: 'xKiro Multi-AI', custom: 'AI' };
+            document.getElementById('ai-loading-text').innerText = `${names[provider] || 'AI'} sedang menyusun berita lengkap...`;
+        }
+
+        function saveAISettingsFromModal() {
+            const provider = document.getElementById('ai-provider').value;
+            state.ai.provider = provider;
+            state.ai.model = document.getElementById('ai-model').value.trim();
+            state.ai.customUrl = document.getElementById('ai-custom-url').value.trim();
+            state.ai.keys[provider] = document.getElementById('ai-api-key').value.trim();
+            localStorage.setItem('arustren_ai', JSON.stringify(state.ai));
+            return { provider, model: state.ai.model, apiKey: state.ai.keys[provider], customUrl: state.ai.customUrl };
+        }
+
+        function stripMarkdownFences(text) {
+            return String(text || '').replace(/^```(?:html|markdown|md)?\s*/i, '').replace(/\s*```$/i, '').trim();
+        }
+
+        function extractOpenAIText(data) {
+            if (data?.output_text) return data.output_text;
+            return data?.choices?.[0]?.message?.content || '';
+        }
+
+        async function callAIProvider(provider, model, apiKey, prompt, systemPrompt, customUrl) {
+            const combinedPrompt = `${systemPrompt}\n\nTUGAS:\n${prompt}`;
+
+            if (provider === 'gemini') {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: combinedPrompt }] }], generationConfig: { temperature: 0.75, maxOutputTokens: 6000 } }) });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data?.error?.message || `Gemini HTTP ${res.status}`);
+                return data?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+            }
+
+            if (provider === 'openai' || provider === 'xai' || provider === 'custom') {
+                const base = provider === 'openai' ? 'https://api.openai.com/v1' : provider === 'xai' ? 'https://api.x.ai/v1' : customUrl.replace(/\/$/, '');
+                if (!base) throw new Error('Custom API Base URL belum diisi.');
+                const url = `${base}/responses`;
+                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model, input: combinedPrompt, temperature: 0.75, max_output_tokens: 6000 }) });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data?.error?.message || `Provider HTTP ${res.status}`);
+                return extractOpenAIText(data);
+            }
+
+            if (provider === 'xkiro') {
+                const url = 'https://api.xkiro.com/v1/chat/completions';
+                const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` }, body: JSON.stringify({ model, messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }], temperature: 0.75, max_tokens: 6000 }) });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data?.error?.message || `xKiro HTTP ${res.status}`);
+                return data?.choices?.[0]?.message?.content || '';
+            }
+
+            if (provider === 'anthropic') {
+                const res = await fetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify({ model, max_tokens: 6000, system: systemPrompt, messages: [{ role: 'user', content: prompt }] }) });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data?.error?.message || `Anthropic HTTP ${res.status}`);
+                return data?.content?.filter(x => x.type === 'text').map(x => x.text).join('') || '';
+            }
+            throw new Error('Provider AI tidak dikenal.');
+        }
+
+        async function loadXKiroModels() {
+            const apiKey = document.getElementById('ai-api-key').value.trim();
+            if (!apiKey) { showToast('Masukkan API Key xKiro terlebih dahulu', 'error'); return; }
+            const btn = document.getElementById('btn-xkiro-models');
+            btn.disabled = true; btn.innerText = 'Memuat...';
+            try {
+                const res = await fetch('https://api.xkiro.com/v1/models');
+                const data = await res.json();
+                if (!res.ok) throw new Error(data?.error?.message || `xKiro HTTP ${res.status}`);
+                const models = Array.isArray(data?.data) ? data.data.filter(m => m?.modality === 'chat' || !m?.modality) : [];
+                if (models.length) {
+                    const model = models.find(m => m.id === document.getElementById('ai-model').value) || models[0];
+                    document.getElementById('ai-model').value = model.id;
+                    showToast(`Model xKiro tersedia: ${models.length} model`);
+                } else throw new Error('Katalog model xKiro kosong.');
+            } catch (err) { showToast(err.message || 'Gagal memuat model xKiro', 'error'); }
+            finally { btn.disabled = false; btn.innerText = 'Muat Model'; }
+        }
+
+        async function runAIGenerator() {
+            const prompt = document.getElementById('ai-prompt-input').value.trim();
+            if (!prompt) { showToast('Masukkan topik berita terlebih dahulu', 'error'); return; }
+
+            const cfg = saveAISettingsFromModal();
+            if (!cfg.apiKey) { showToast('Masukkan API Key provider terlebih dahulu', 'error'); return; }
+            if (!cfg.model) { showToast('Masukkan nama model AI terlebih dahulu', 'error'); return; }
+
+            document.getElementById('ai-loading').classList.remove('hidden');
+            document.getElementById('btn-generate-ai').disabled = true;
+
+            const systemPrompt = aiMode === 'article'
+                ? 'Kamu adalah editor dan jurnalis media digital Indonesia. Buat artikel orisinal, faktual berdasarkan informasi yang diberikan, tidak mengarang kutipan atau data. Gunakan HTML bersih saja dengan <p>, <h2>, <h3>, <ul>, <li>, <strong>, dan <blockquote>. Jangan gunakan Markdown fence. Buat pembuka yang kuat, isi yang informatif, dan penutup yang relevan.'
+                : 'Buat 5 ide judul berita yang informatif, menarik, natural, dan ramah SEO dalam bahasa Indonesia. Beri nomor 1 sampai 5 dan jangan membuat klaim fakta yang tidak ada di topik.';
+
+            try {
+                const resultText = stripMarkdownFences(await callAIProvider(cfg.provider, cfg.model, cfg.apiKey, prompt, systemPrompt, cfg.customUrl));
+                if (!resultText) throw new Error('AI tidak mengembalikan teks.');
+
+                if (aiMode === 'article') {
+                    quillEditor.root.innerHTML = resultText;
+                    if (!document.getElementById('input-title').value) document.getElementById('input-title').value = prompt.split('\n')[0].slice(0, 120);
+                    showToast(`Artikel berhasil dibuat dengan ${cfg.provider.toUpperCase()}!`);
+                } else {
+                    alert(`Rekomendasi Judul dari ${cfg.provider.toUpperCase()}:\n\n${resultText}`);
+                }
+                closeAIModal();
+            } catch (err) {
+                console.error(err);
+                showToast(err.message || 'Kesalahan koneksi API', 'error');
+            } finally {
+                document.getElementById('ai-loading').classList.add('hidden');
+                document.getElementById('btn-generate-ai').disabled = false;
+            }
+        }
+
+        async function generateAICoverImage() {
+            const title = document.getElementById('input-title').value.trim();
+            if (!title) {
+                showToast('Isi judul artikel terlebih dahulu!', 'error');
+                return;
+            }
+
+            showToast('Membuat gambar Cover AI...');
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: `A high quality news editorial illustration banner for: ${title}. 16:9 ratio.` }] }],
+                        generationConfig: { responseModalities: ['TEXT', 'IMAGE'] }
+                    })
+                });
+                const result = await response.json();
+                const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+                if (base64Data) {
+                    const imageUrl = `data:image/png;base64,${base64Data}`;
+                    document.getElementById('input-cover').value = imageUrl;
+                    document.getElementById('img-cover-preview').src = imageUrl;
+                    document.getElementById('cover-preview-box').classList.remove('hidden');
+                    showToast('Cover AI berhasil dibuat!');
+                } else {
+                    showToast('Gagal menghasilkan gambar AI', 'error');
+                }
+            } catch (err) {
+                console.error(err);
+                showToast('Gagal memanggil API Gambar AI', 'error');
+            }
+        }
+
+        function previewCover() {
+            const url = document.getElementById('input-cover').value.trim();
+            if (url) {
+                document.getElementById('img-cover-preview').src = url;
+                document.getElementById('cover-preview-box').classList.remove('hidden');
+            }
+        }
+
+        function saveSyndicationSettings() {
+            showToast('Pengaturan Cross-Post disalin!');
+        }
+
+        // FACTUAL METRICS ENGINE
+        // No random traffic, fake readers, or synthetic revenue.
+        // Important: localStorage is NOT a global database. Never present its account/view totals as site-wide totals.
+        function refreshFactualMetrics() {
+            const liveCountEl = document.getElementById('live-readers-count');
+            if (liveCountEl) liveCountEl.innerText = '--';
+            updateDashboardStats();
+            const accountCountEl = document.getElementById('stat-total-users');
+            if (accountCountEl) accountCountEl.innerText = getRegisteredAccountCount();
+            const accountStatusEl = document.getElementById('account-data-status');
+            if (accountStatusEl) accountStatusEl.innerText = getAccountDataStatus();
+            if (currentViewMode === 'portal') renderTrendingList();
+        }
+
+        function addLogEntry(htmlText) {
+            const container = document.getElementById('realtime-logs-container');
+            if (!container) return;
+            const timeStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const item = document.createElement('div');
+            item.className = "p-2 bg-slate-950 rounded-xl border border-slate-800/80 text-[11px] text-slate-300 flex justify-between items-center space-x-2";
+            item.innerHTML = `<span>${htmlText}</span><span class="text-[9px] text-slate-500 font-mono flex-shrink-0">${timeStr}</span>`;
+            container.prepend(item);
+            if (container.children.length > 15) container.removeChild(container.lastChild);
+        }
+
+        // MISC HELPERS
+        function copyArticleLink() {
+            document.execCommand('copy');
+            showToast('Link berita berhasil disalin ke clipboard!');
+        }
+
+        function shareSocial(type) {
+            showToast(`Membuka dialog share ${type.toUpperCase()}...`);
+        }
+
+        function handleNewsletter(e) {
+            e.preventDefault();
+            showToast('Terima kasih telah berlangganan buletin ArusTren!');
+            e.target.reset();
+        }
+    </script>
+<script>
+/* ARUSTREN DATABASE BRIDGE — server is the source of truth */
+const ARUSTREN_API = (window.ARUSTREN_CONFIG?.API_BASE || (window.location.origin + '/api')).replace(/\/+$/, '');
+const ARUSTREN_TOKEN_KEY = 'arustren_server_token';
+const ARUSTREN_VISITOR_KEY = 'arustren_visitor_id';
+const ARUSTREN_SESSION_KEY = 'arustren_visit_session';
+let serverRealtimeSource = null;
+let serverOnlineTimer = null;
+
+function serverHeaders(json=true){
+    const h={}; if(json) h['Content-Type']='application/json';
+    const t=localStorage.getItem(ARUSTREN_TOKEN_KEY); if(t) h.Authorization='Bearer '+t;
+    return h;
+}
+async function api(path, options={}){
+    const r=await fetch(ARUSTREN_API+path,{...options,headers:{...serverHeaders(!!options.body),...(options.headers||{})}});
+    let d={}; try{d=await r.json()}catch{}
+    if(!r.ok) throw new Error(d.error||`HTTP ${r.status}`); return d;
+}
+function getVisitorId(){let v=localStorage.getItem(ARUSTREN_VISITOR_KEY);if(!v){v='vis_'+crypto.randomUUID();localStorage.setItem(ARUSTREN_VISITOR_KEY,v)}return v}
+function getVisitSession(){let v=sessionStorage.getItem(ARUSTREN_SESSION_KEY);if(!v){v='ses_'+crypto.randomUUID();sessionStorage.setItem(ARUSTREN_SESSION_KEY,v)}return v}
+function serverArticleToUi(a){return {...a,ownerId:a.ownerId||null,likes:Number(a.reactions?.suka||0),views:Number(a.views||0),comments:(a.comments||[]).map(c=>({...c,time:c.created_at?new Date(c.created_at).toLocaleString('id-ID'):'Baru saja'}))}}
+async function loadServerArticles(){
+    const d=await api('/articles');
+    state.articles=(d.articles||[]).map(serverArticleToUi);
+    renderPortalView(); renderStudioDashboard(); updateDashboardStats();
+    return state.articles;
+}
+async function loadServerMe(){
+    const t=localStorage.getItem(ARUSTREN_TOKEN_KEY); if(!t){currentUser=null;updateAuthUI();return null}
+    try{const d=await api('/me');currentUser=d.user||null;updateAuthUI();return currentUser}catch{localStorage.removeItem(ARUSTREN_TOKEN_KEY);currentUser=null;updateAuthUI();return null}
+}
+async function submitAuth(e){
+    e.preventDefault();
+    const email=normalizeGmail(document.getElementById('auth-email').value), password=document.getElementById('auth-password').value, confirm=document.getElementById('auth-confirm').value;
+    if(!isValidGmail(email)) return showToast('Gunakan alamat Gmail yang valid (@gmail.com).','error');
+    if(password.length<8) return showToast('Sandi minimal 8 karakter.','error');
+    if(authMode==='register'&&password!==confirm)return showToast('Konfirmasi sandi tidak sama.','error');
+    try{
+        const d=await api('/auth/'+(authMode==='register'?'register':'login'),{method:'POST',body:JSON.stringify({email,password})});
+        localStorage.setItem(ARUSTREN_TOKEN_KEY,d.token); currentUser=d.user; closeAuthModal(); updateAuthUI();
+        if(authMode==='register'){
+            try{await api('/bootstrap-samples',{method:'POST',body:JSON.stringify({articles:sampleArticles})})}catch{}
+        }
+        await loadServerArticles(); await refreshFactualMetrics(); showToast(authMode==='register'?'Akun berhasil dibuat. Data tersimpan di database.':'Login berhasil.');
+    }catch(err){showToast(err.message,'error')}
+}
+function logoutUser(){localStorage.removeItem(ARUSTREN_TOKEN_KEY);currentUser=null;updateAuthUI();switchViewMode('portal');showToast('Kamu sudah logout.')}
+function getCurrentUser(){return currentUser}
+function getRegisteredAccountCount(){return Number(window.__serverStats?.users||0)}
+function getAccountDataStatus(){return 'Database server — data global'}
+function getActiveOwnerId(){return currentUser?.id||null}
+function requireLogin(action='melanjutkan'){if(currentUser)return true;showToast('Silakan login terlebih dahulu untuk '+action+'.','error');openAuthModal('login');return false}
+
+async function openReaderModal(id){
+    try{
+        const d=await api('/articles/'+encodeURIComponent(id)); const art=serverArticleToUi(d.article); currentActiveArticleId=art.id;
+        const viewKey='arustren_viewed_'+art.id;
+        if(!sessionStorage.getItem(viewKey)){
+            await api('/analytics/view',{method:'POST',body:JSON.stringify({articleId:art.id,visitorId:getVisitorId(),sessionId:getVisitSession()})});
+            sessionStorage.setItem(viewKey,'1');
+            const fresh=await api('/articles/'+encodeURIComponent(id)); Object.assign(art,serverArticleToUi(fresh.article));
+        }
+        const idx=state.articles.findIndex(x=>String(x.id)===String(art.id)); if(idx>=0)state.articles[idx]=art; else state.articles.unshift(art);
+        document.getElementById('read-title').innerText=art.title; document.getElementById('read-author').innerText=art.author; document.getElementById('read-date').innerText=art.date||''; document.getElementById('read-time').innerText=art.readTime||''; document.getElementById('read-category').innerText=art.category||'';
+        document.getElementById('read-views-count').innerText=art.views; document.getElementById('read-likes-count').innerText=art.likes||0; document.getElementById('read-summary').innerText=art.summary||art.excerpt||''; document.getElementById('read-content-body').innerHTML=art.content||'';
+        const cover=document.getElementById('read-cover-img');cover.src=art.cover||''; document.getElementById('read-cover-box').classList.toggle('hidden',!art.cover);
+        document.getElementById('read-active-users-num').innerText=window.__serverStats?.online??'--';
+        document.getElementById('react-suka-num').innerText=art.reactions?.suka||0; document.getElementById('react-info-num').innerText=art.reactions?.informatif||0; document.getElementById('react-kagum-num').innerText=art.reactions?.kagum||0;
+        renderArticleComments(art); document.getElementById('modal-reader').classList.remove('hidden'); document.getElementById('reader-scroll-area').scrollTop=0; updateReadingProgress();
+    }catch(err){showToast(err.message,'error')}
+}
+async function addArticleLike(){return triggerReaction('suka')}
+async function triggerReaction(type){
+    if(!currentActiveArticleId)return; try{const d=await api('/articles/'+encodeURIComponent(currentActiveArticleId)+'/reactions',{method:'POST',body:JSON.stringify({visitorId:getVisitorId(),type})});const a=serverArticleToUi(d.article);const i=state.articles.findIndex(x=>String(x.id)===String(a.id));if(i>=0)state.articles[i]=a;document.getElementById('react-suka-num').innerText=a.reactions.suka||0;document.getElementById('react-info-num').innerText=a.reactions.informatif||0;document.getElementById('react-kagum-num').innerText=a.reactions.kagum||0;document.getElementById('read-likes-count').innerText=a.reactions.suka||0;showToast('Reaksi berhasil dikirim!')}catch(err){showToast(err.message,'error')}
+}
+async function submitUserComment(e){
+    e.preventDefault(); if(!currentActiveArticleId)return;
+    const name=document.getElementById('comment-author').value.trim(),city=document.getElementById('comment-city').value.trim()||'Indonesia',text=document.getElementById('comment-text').value.trim(); if(!text)return;
+    try{const d=await api('/articles/'+encodeURIComponent(currentActiveArticleId)+'/comments',{method:'POST',body:JSON.stringify({visitorId:getVisitorId(),name,city,text})});const a=serverArticleToUi(d.article);const i=state.articles.findIndex(x=>String(x.id)===String(a.id));if(i>=0)state.articles[i]=a;renderArticleComments(a);document.getElementById('comment-text').value='';showToast('Komentar kamu berhasil dipublikasikan!')}catch(err){showToast(err.message,'error')}
+}
+async function saveArticle(e){
+    e.preventDefault(); if(!requireLogin('menyimpan artikel'))return;
+    const editId=document.getElementById('edit-article-id').value, title=document.getElementById('input-title').value.trim(), category=document.getElementById('input-category').value, author=document.getElementById('input-author').value||'Redaksi ArusTren', tags=document.getElementById('input-tags').value, adsenseSlot=document.getElementById('input-adsense-slot').value.trim(), cover=document.getElementById('input-cover').value||'https://images.unsplash.com/photo-1585829365295-ab7cd400c167?auto=format&fit=crop&w=1200&q=80', content=quillEditor.root.innerHTML;
+    const textContent=quillEditor.getText(), excerpt=textContent.slice(0,130)+'...', readTime=Math.max(1,Math.ceil(textContent.trim().split(/\s+/).length/200))+' mnt';
+    const payload={title,category,author,tags,cover,content,excerpt,summary:excerpt,readTime,adsenseSlot};
+    try{let d;if(editId)d=await api('/articles/'+encodeURIComponent(editId),{method:'PUT',body:JSON.stringify(payload)});else d=await api('/articles',{method:'POST',body:JSON.stringify(payload)});const a=serverArticleToUi(d.article);const i=state.articles.findIndex(x=>String(x.id)===String(a.id));if(i>=0)state.articles[i]=a;else state.articles.unshift(a);await loadServerArticles();switchViewMode('portal');showToast(editId?'Artikel berhasil diperbarui di database!':'Artikel berhasil dipublikasikan ke database!')}catch(err){showToast(err.message,'error')}
+}
+async function editArticle(id){
+    if(!requireLogin('mengedit artikel'))return; try{const d=await api('/articles/'+encodeURIComponent(id));const a=serverArticleToUi(d.article);if(a.ownerId!==currentUser.id)return showToast('Artikel ini bukan milik akun kamu.','error');document.getElementById('edit-article-id').value=a.id;document.getElementById('input-title').value=a.title;document.getElementById('input-category').value=a.category;document.getElementById('input-author').value=a.author;document.getElementById('input-tags').value=a.tags||'';document.getElementById('input-adsense-slot').value=a.adsenseSlot||'';document.getElementById('input-cover').value=a.cover||'';quillEditor.root.innerHTML=a.content||'';navStudioTab('editor');updateSEOCheck();}catch(err){showToast(err.message,'error')}
+}
+async function deleteArticle(id){if(!requireLogin('menghapus artikel'))return;try{await api('/articles/'+encodeURIComponent(id),{method:'DELETE'});await loadServerArticles();renderStudioDashboard();showToast('Artikel dihapus dari database.')}catch(err){showToast(err.message,'error')}}
+async function updateDashboardStats(){
+    if(!currentUser){document.getElementById('stat-total-articles').innerText='0';document.getElementById('stat-total-views').innerText='0';document.getElementById('stat-total-users').innerText=String(window.__serverStats?.users||0);document.getElementById('stat-est-revenue').innerText='Belum tersedia';return}
+    try{const d=await api('/analytics/dashboard');document.getElementById('stat-total-articles').innerText=Number(d.totalArticles||0).toLocaleString('id-ID');document.getElementById('stat-total-views').innerText=Number(d.totalViews||0).toLocaleString('id-ID');document.getElementById('stat-est-revenue').innerText='Belum tersedia';document.getElementById('stat-active-ads').innerText=String(d.activeSlots||0);document.getElementById('ads-active-badge').innerText=`${d.activeSlots||0} Artikel`;state.articles=(d.articles||[]).map(serverArticleToUi).concat(state.articles.filter(a=>!d.articles.some(x=>String(x.id)===String(a.id))));updateSidebarWidgetStats()}catch{}
+}
+async function updateSidebarWidgetStats(){const w=document.getElementById('widget-est-earning'),v=document.getElementById('widget-total-views'),a=document.getElementById('widget-active-ads-count');if(w)w.innerText='Belum tersedia';if(!currentUser){if(v)v.innerText='0';if(a)a.innerText='0';return}try{const d=await api('/analytics/dashboard');if(v)v.innerText=Number(d.totalViews||0).toLocaleString('id-ID');if(a)a.innerText=String(d.activeSlots||0)}catch{}}
+async function refreshFactualMetrics(){try{window.__serverStats=await api('/stats');const n=document.getElementById('live-readers-count');if(n)n.innerText=window.__serverStats.online??0;const u=document.getElementById('stat-total-users');if(u)u.innerText=window.__serverStats.users??0;const st=document.getElementById('account-data-status');if(st)st.innerText='Database server — data global';updateSidebarWidgetStats();if(currentViewMode==='portal')renderTrendingList()}catch{}}
+function startServerRealtime(){
+    try{serverRealtimeSource?.close()}catch{}
+    serverRealtimeSource=new EventSource(ARUSTREN_API+'/realtime');
+    serverRealtimeSource.addEventListener('articles',()=>loadServerArticles().catch(()=>{}));
+    serverRealtimeSource.addEventListener('analytics',()=>{refreshFactualMetrics();updateDashboardStats()});
+    serverRealtimeSource.addEventListener('engagement',()=>{if(currentActiveArticleId)openReaderModal(currentActiveArticleId);else loadServerArticles().catch(()=>{})});
+    serverRealtimeSource.addEventListener('accounts',refreshFactualMetrics);
+    serverRealtimeSource.onerror=()=>{};
+    const heartbeat=async()=>{try{const d=await api('/analytics/presence',{method:'POST',body:JSON.stringify({visitorId:getVisitorId(),page:currentViewMode})});window.__serverStats=window.__serverStats||{};window.__serverStats.online=d.online;const n=document.getElementById('live-readers-count');if(n)n.innerText=d.online??0}catch{}};
+    heartbeat();clearInterval(serverOnlineTimer);serverOnlineTimer=setInterval(heartbeat,20000);
+}
+window.addEventListener('DOMContentLoaded',async()=>{
+    try{await loadServerMe(); await loadServerArticles();}catch(err){console.warn('Backend belum tersedia:',err.message)}
+    startServerRealtime(); await refreshFactualMetrics();
+});
+</script>
+
+</body>
+</html>
